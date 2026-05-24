@@ -1,128 +1,118 @@
-# Summary Documents and Background Design
+# 总结文档与背景图修复设计
 
-## Goal
+## 目标
 
-Update the Android diary app so the Summary page matches the real `astroblog`
-summary structure:
+调整安卓日记 App 的总结页，使它匹配桌面 `astroblog` 项目的真实
+`summary` 目录结构：
 
-- Year summaries live at `src/content/posts/summary/YYyear/index.md`.
-- Month summaries live at `src/content/posts/summary/YYyear/Mmonth/index.md`.
-- Weekly journals live at `src/content/posts/summary/YYyear/Mmonth/Nweek.md`.
+- 年度总结位于 `src/content/posts/summary/YYyear/index.md`。
+- 月度总结位于 `src/content/posts/summary/YYyear/Mmonth/index.md`。
+- 周记位于 `src/content/posts/summary/YYyear/Mmonth/Nweek.md`。
 
-The Summary page should read these Markdown files, render selected content for
-reading, and only show raw Markdown after the user chooses to edit.
+总结页需要读取这些 Markdown 文件。用户点击年份、月份或周时，默认看到
+渲染后的阅读内容；只有点击编辑按钮后，才进入完整 Markdown 原文编辑和推送。
 
-Also fix the app background image feature so selected images are visible and
-fail gracefully when an image cannot be opened.
+同时修复背景图功能，使用户选择的背景图片能正常显示，并在图片读取失败时
+优雅降级为普通主题背景。
 
-## Summary Page Behavior
+## 总结页交互
 
-The Summary page has two interaction modes:
+总结页有两类点击行为：
 
-- Expansion controls: tapping the arrow or side control next to a year/month
-  expands or collapses child nodes.
-- Selection controls: tapping the year/month/week label selects that document
-  and displays its rendered content.
+- 展开控制：点击年份或月份旁边的箭头/两侧区域，展开或收起子节点。
+- 内容选择：点击年份、月份或周的文字区域，选中对应文档并显示其渲染内容。
 
-Node behavior:
+节点行为如下：
 
-- Year label selects and renders the year `index.md`.
-- Year expansion shows months.
-- Month label selects and renders the month `index.md`.
-- Month expansion shows the four weekly files.
-- Week label selects and renders the corresponding `Nweek.md`.
-- Week nodes do not expand into day nodes.
+- 点击年份文字：显示该年的 `index.md` 渲染内容。
+- 点击年份展开控制：展开月份。
+- 点击月份文字：显示该月的 `index.md` 渲染内容。
+- 点击月份展开控制：展开四个周文件。
+- 点击第几周：显示对应 `Nweek.md` 的渲染内容。
+- 周节点不再继续展开到每天。
 
-The selected document reader shows rendered Markdown content. It is not an
-editor by default. A floating edit button opens the selected document as full
-raw Markdown.
+选中文档后，页面展示的是阅读模式，不直接展示 Markdown 原文。右下角提供
+编辑按钮，点击后打开当前选中文档的完整 Markdown 原文。
 
-## Editing and Push
+## 编辑与推送
 
-Editing from the Summary page uses the same GitHub push path as the existing
-editor:
+从总结页进入编辑时，沿用现有 GitHub 推送链路：
 
-- The editor receives the selected document path and raw Markdown.
-- Drafts are keyed by document path.
-- Push writes the edited Markdown back to the same GitHub path.
-- After a successful push, the app refreshes remote documents and updates the
-  local cache.
+- 编辑页接收当前选中文档的仓库路径和完整 Markdown 原文。
+- 草稿按文档路径保存。
+- 推送时把编辑后的 Markdown 写回同一个 GitHub 路径。
+- 推送成功后刷新远端文档，并更新本地缓存。
 
-Daily editing can keep the current day-specific behavior. Summary document
-editing is path-based and should not try to merge individual day sections.
+日记页按天编辑的现有能力保留。总结页的编辑是按文件路径编辑，不尝试只合并
+某一天的小节内容。
 
-## Data Model
+## 数据模型
 
-Introduce a generic summary document model:
+新增通用总结文档模型：
 
 - `DiaryDocument`
   - `path`
-  - `type`: year summary, month summary, or week journal
+  - `type`：年度总结、月度总结或周记
   - `year`
-  - optional `month`
-  - optional `weekIndex`
+  - 可选 `month`
+  - 可选 `weekIndex`
   - `title`
   - `published`
   - `markdown`
   - `body`
 
-The existing `DiaryWeek` model can still be used for the daily diary page and
-week parsing. The Summary page should be built from `DiaryDocument` so it can
-include year and month `index.md` documents.
+现有 `DiaryWeek` 仍然用于日记页和周记解析。总结页改为基于 `DiaryDocument`
+构建树结构，这样年/月 `index.md` 和周记文件可以统一处理。
 
-## GitHub Loading
+## GitHub 读取
 
-For token-based repositories, list the Git tree recursively and include:
+对于带 Token 的仓库，递归读取 Git tree，并纳入以下文件：
 
 - `src/content/posts/summary/YYyear/index.md`
 - `src/content/posts/summary/YYyear/Mmonth/index.md`
 - `src/content/posts/summary/YYyear/Mmonth/Nweek.md`
 
-For public repositories without a token, derive candidate paths from the same
-known structure used by `astroblog`:
+对于不带 Token 的公开仓库，按 `astroblog` 的固定结构推导候选路径：
 
-- years from 2025 through the current year
-- months up to the current month for the current year
-- `index.md` for each year and month
-- `1week.md` through `4week.md` for each month
+- 年份从 2025 到当前年份。
+- 当前年份只推导到当前月份。
+- 每个年份包含一个 `index.md`。
+- 每个月份包含一个 `index.md`。
+- 每个月份包含 `1week.md` 到 `4week.md`。
 
-Missing public files are ignored.
+公开仓库中不存在的候选文件直接忽略。
 
-## Rendering
+## Markdown 渲染
 
-Markdown rendering should be simple for this version:
+本版本使用轻量渲染，不额外引入完整 Markdown 渲染依赖：
 
-- Strip frontmatter.
-- Strip the first H1 from the displayed body if it duplicates the document
-  title.
-- Render headings and paragraphs with Compose text styles.
-- Preserve readable line breaks.
+- 去掉 frontmatter。
+- 如果正文第一个 H1 与文档标题重复，则阅读模式中只保留一个标题。
+- 用 Compose 文本样式渲染标题和段落。
+- 保留可读的换行。
 
-This avoids adding a Markdown rendering dependency while still giving a clean
-reading mode.
+这样可以先得到干净的阅读模式，同时避免为了这个版本引入额外复杂度。
 
-## Background Image Fix
+## 背景图修复
 
-The current background layer makes selected images nearly invisible because the
-image is drawn at low alpha and then covered by a mostly opaque theme layer.
+当前背景图几乎不可见，原因是图片先以很低透明度绘制，然后又被一层接近不透明
+的主题背景盖住。
 
-Change the background behavior:
+调整后的行为：
 
-- Draw the selected image at full opacity with `ContentScale.Crop`.
-- Draw a translucent theme-colored scrim above it for readability.
-- If no image is selected, use the normal solid theme background.
-- Load the image off the main thread.
-- If URI loading fails, render the normal background instead of crashing.
+- 选中背景图时，图片以原始不透明度全屏铺底，并使用 `ContentScale.Crop`。
+- 在图片上方覆盖一层半透明主题色遮罩，保证文字可读。
+- 没有选择背景图时，使用普通纯色主题背景。
+- 图片读取放到后台线程。
+- URI 读取失败时不崩溃，直接回退到普通主题背景。
 
-## Tests
+## 测试
 
-Add focused unit tests for:
+新增聚焦单元测试：
 
-- Path matching and extraction for year/month/week summary documents.
-- Summary tree building that includes year and month summary documents and
-  week leaves without day expansion.
-- Markdown display body extraction from frontmatter documents.
-- Cache round trip keyed by document path.
+- 年/月/周 summary 路径匹配与信息提取。
+- 总结树构建包含年总结、月总结和周节点，周节点不再展开到天。
+- Markdown 文档从 frontmatter 中提取阅读正文。
+- 文档缓存按路径保存和读取。
 
-Existing tests for week parsing, path resolving, drafts, and themes should
-continue to pass.
+现有周记解析、路径计算、草稿、主题相关测试都需要继续通过。
