@@ -5,6 +5,7 @@ import java.time.LocalDate
 data class DiaryWeek(
     val key: WeekKey,
     val title: String,
+    val intro: String = "",
     val published: LocalDate,
     val description: String,
     val tags: List<String>,

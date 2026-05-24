@@ -10,17 +10,21 @@ class DiaryMarkdownCodec {
         val lines = normalize(markdown).lines()
         require(lines.isNotEmpty()) { "markdown is empty" }
 
-        val frontMatterEnd = findClosingFence(lines, 0)
-        require(frontMatterEnd > 0) { "front matter is missing" }
+        val openingFenceIndex = firstNonBlankIndex(lines)
+        require(openingFenceIndex >= 0 && lines[openingFenceIndex].trim() == "---") { "front matter is missing" }
+        val frontMatterEnd = findClosingFence(lines, openingFenceIndex)
+        require(frontMatterEnd > openingFenceIndex) { "front matter is missing" }
 
-        val frontMatter = parseFrontMatter(lines.subList(1, frontMatterEnd))
+        val frontMatter = parseFrontMatter(lines.subList(openingFenceIndex + 1, frontMatterEnd))
         var index = frontMatterEnd + 1
         while (index < lines.size && lines[index].isBlank()) {
             index++
         }
 
-        require(index < lines.size && lines[index].trimStart().startsWith("#")) { "title heading is missing" }
-        val title = lines[index].removePrefix("#").trim()
+        require(index < lines.size) { "title heading is missing" }
+        val titleMatch = titleHeadingRegex.matchEntire(lines[index])
+        require(titleMatch != null) { "title heading is missing" }
+        val title = titleMatch.groupValues[1].trim()
         index++
         while (index < lines.size && lines[index].isBlank()) {
             index++
@@ -29,6 +33,9 @@ class DiaryMarkdownCodec {
         val weekKey = WeekKey.from(frontMatter.published)
 
         val days = mutableListOf<DiaryDay>()
+        val introLines = mutableListOf<String>()
+        var intro = ""
+        var introCaptured = false
         var currentDayMonth: Int? = null
         var currentDayOfMonth: Int? = null
         val currentContent = mutableListOf<String>()
@@ -46,23 +53,38 @@ class DiaryMarkdownCodec {
             currentContent.clear()
         }
 
+        fun captureIntroIfNeeded() {
+            if (!introCaptured) {
+                intro = trimBlankLines(introLines)
+                introLines.clear()
+                introCaptured = true
+            }
+        }
+
         while (index < lines.size) {
             val line = lines[index]
             val heading = dayHeadingRegex.matchEntire(line)
             if (heading != null) {
+                captureIntroIfNeeded()
                 finishDay()
                 currentDayMonth = heading.groupValues[1].toInt()
                 currentDayOfMonth = heading.groupValues[2].toInt()
             } else {
-                currentContent += line
+                if (introCaptured) {
+                    currentContent += line
+                } else {
+                    introLines += line
+                }
             }
             index++
         }
+        captureIntroIfNeeded()
         finishDay()
 
         return DiaryWeek(
             key = weekKey,
             title = title,
+            intro = intro,
             published = frontMatter.published,
             description = frontMatter.description,
             tags = frontMatter.tags,
@@ -84,9 +106,17 @@ class DiaryMarkdownCodec {
         appendLine()
         appendLine("# ${week.title}")
 
+        if (week.intro.isNotBlank()) {
+            appendLine()
+            append(week.intro.trimEnd())
+        }
+
         if (week.days.isNotEmpty()) {
             appendLine()
-            append(week.days.joinToString("\n\n") { renderDay(it) })
+            if (week.intro.isNotBlank()) {
+                appendLine()
+            }
+            append(week.days.joinToString("\n") { renderDay(it) })
         }
     }
 
@@ -211,6 +241,13 @@ class DiaryMarkdownCodec {
         return -1
     }
 
+    private fun firstNonBlankIndex(lines: List<String>): Int {
+        for (index in lines.indices) {
+            if (lines[index].isNotBlank()) return index
+        }
+        return -1
+    }
+
     private fun normalize(markdown: String): String = markdown
         .removePrefix("\uFEFF")
         .replace("\r\n", "\n")
@@ -271,6 +308,7 @@ class DiaryMarkdownCodec {
     )
 
     private companion object {
+        val titleHeadingRegex = Regex("^#\\s+(.+?)\\s*$")
         val dayHeadingRegex = Regex("^##\\s*(\\d{1,2})\\.(\\d{1,2})\\s*$")
     }
 }
