@@ -56,3 +56,14 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+tasks.register<JavaExec>("runDomainTests") {
+    group = "verification"
+    dependsOn("compileDebugKotlin", "compileDebugUnitTestKotlin")
+    mainClass.set("com.cypress.diary.TestRunnerKt")
+    classpath = files(
+        layout.buildDirectory.dir("tmp/kotlin-classes/debug"),
+        layout.buildDirectory.dir("tmp/kotlin-classes/debugUnitTest"),
+        configurations.getByName("debugUnitTestRuntimeClasspath"),
+    )
+}
