@@ -53,17 +53,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
+    testImplementation("junit:junit:4.13.2")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-}
-
-tasks.register<JavaExec>("runDomainTests") {
-    group = "verification"
-    dependsOn("compileDebugKotlin", "compileDebugUnitTestKotlin")
-    mainClass.set("com.cypress.diary.TestRunnerKt")
-    classpath = files(
-        layout.buildDirectory.dir("tmp/kotlin-classes/debug"),
-        layout.buildDirectory.dir("tmp/kotlin-classes/debugUnitTest"),
-        configurations.getByName("debugUnitTestRuntimeClasspath"),
-    )
 }
