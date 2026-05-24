@@ -1,137 +1,137 @@
-# Diary Android App Design
+# 安卓日记 App 设计
 
-## Goal
-Build an Android app for writing diary entries on a phone and syncing them directly to the user's GitHub blog repository.
+## 目标
+做一个安卓 App，方便你在手机上写日记，并且直接同步到你的 GitHub 博客仓库。
 
-The app should support:
-- GitHub login
-- browsing diary content by day and by week/month/year
-- creating a new weekly markdown file when a new week starts
-- editing existing diary entries inside weekly markdown files
-- pushing changes back to GitHub without a separate backend
+需要支持：
+- GitHub 登录
+- 按天、按周、按月、按年浏览日记
+- 新的一周到来时自动创建新的周记 Markdown 文件
+- 编辑已有的周记内容
+- 不依赖单独后端，直接写回 GitHub
 
-## Current Blog Structure
-The target blog already stores content as Markdown files in an Astro/Fuwari repository.
+## 现有博客结构
+你的博客内容已经是 Astro/Fuwari 仓库里的 Markdown 文件。
 
-Relevant patterns observed:
-- weekly diary files live under `src/content/posts/summary/YYYYyear/Mmonth/`
-- files are named like `1week.md`, `2week.md`, etc.
-- the frontmatter uses standard blog fields such as `title`, `published`, `description`, `tags`, `category`, and `draft`
-- each file contains the week title plus day-level sections inside the Markdown body
+我看到的规则是：
+- 周记文件放在 `src/content/posts/summary/YYYYyear/Mmonth/`
+- 文件名类似 `1week.md`、`2week.md`
+- frontmatter 使用标准字段，比如 `title`、`published`、`description`、`tags`、`category`、`draft`
+- 文件正文里是周标题加每天的小节
 
-## Product Shape
-The app has three main surfaces:
+## 产品形态
+这个 App 主要有三个页面：
 
-1. Diary view
-   - shows a single day's entry
-   - supports previous/next day navigation
-   - includes a floating edit action
-   - uses a card-based reading layout similar to the reference image
+1. 日记页
+   - 显示某一天的内容
+   - 支持上一天/下一天切换
+   - 有一个悬浮编辑按钮
+   - 采用和参考图类似的卡片式阅读布局
 
-2. Summary view
-   - shows year -> month -> week -> day hierarchy
-   - expands/collapses nested ranges
-   - lets the user jump to any week or day quickly
+2. 总结页
+   - 按 年 -> 月 -> 周 -> 天 展开
+   - 支持折叠和展开
+   - 方便快速跳转到任意周记或某一天
 
-3. Editor
-   - lets the user edit the current day or the whole weekly file
-   - creates a new weekly file automatically when the current date falls into a week that does not exist yet
+3. 编辑页
+   - 可以编辑当前这一天，或整个周记文件
+   - 如果当前日期所在的周记文件不存在，就自动新建
 
-## Recommended Approach
-Use a single Android client with no backend.
+## 推荐方案
+用一个纯安卓客户端，不加后端。
 
-Core stack:
-- Jetpack Compose UI
+核心技术：
+- Jetpack Compose
 - Kotlin
-- MVVM-style state handling
-- GitHub OAuth login
-- GitHub Contents API for reading and writing markdown files
-- local draft cache for offline editing and crash recovery
+- MVVM
+- GitHub OAuth 登录
+- GitHub Contents API 读写 Markdown
+- 本地草稿缓存，用于离线编辑和防止意外丢失
 
-Why this route:
-- simplest end-to-end path
-- no server to deploy or maintain
-- matches the user's existing GitHub-based workflow
-- keeps the app focused on writing, not infrastructure
+为什么这样做：
+- 端到端最简单
+- 不用维护服务器
+- 和你现在的 GitHub 写作流程一致
+- 重点放在写日记本身，不把复杂度放到基础设施上
 
-## Data Model
-Treat each weekly markdown file as the source of truth.
+## 数据模型
+把每个周记 Markdown 文件当成唯一事实来源。
 
-Domain objects:
+核心对象：
 - `DiaryWeek`
-  - repo path
-  - year
-  - month
-  - week index within the month
-  - published date
-  - title
-  - markdown body
+  - 仓库路径
+  - 年
+  - 月
+  - 月内周序号
+  - 发布日期
+  - 标题
+  - Markdown 正文
 
 - `DiaryDay`
-  - date
-  - heading text
-  - body markdown
-  - optional visual marker or section icon
+  - 日期
+  - 小节标题
+  - 小节正文
+  - 可选图标或标记
 
-The app should parse and regenerate Markdown instead of inventing a second storage format.
+App 不单独发明一套存储格式，只负责解析和重新生成 Markdown。
 
-## Sync Flow
-Read flow:
-- log in to GitHub
-- fetch repo file list or resolve the expected weekly file path
-- load the markdown content
-- parse it into week/day structures for the UI
+## 同步流程
+读取流程：
+- 登录 GitHub
+- 获取仓库文件列表，或直接推导目标周记路径
+- 读取 Markdown 内容
+- 解析成周/天结构供界面使用
 
-Write flow:
-- edit in the app
-- save to local draft cache immediately
-- regenerate the markdown file
-- upload the updated file to GitHub
-- if the file does not exist for the new week, create it first
+写入流程：
+- 在 App 里编辑
+- 立即保存到本地草稿缓存
+- 重新生成 Markdown
+- 上传到 GitHub
+- 如果新的一周没有对应文件，就先创建
 
-## Weekly File Rules
-When the date moves into a new week:
-- compute the new year/month/week location
-- create a fresh `Nweek.md` file if it is missing, where `N` is the week index within the month
-- write the standard frontmatter
-- seed it with the new week title and an empty or starter day section
+## 周记文件规则
+当日期进入新的一周时：
+- 计算新的 年 / 月 / 周 位置
+- 如果 `Nweek.md` 不存在，就创建一个，其中 `N` 是月内周序号
+- 写入标准 frontmatter
+- 填入新的周标题和一个空的或初始的日记段落
 
-When editing an existing week:
-- update only the relevant markdown file
-- preserve the rest of the file unless the parser needs to normalize formatting
+编辑已有周记时：
+- 只更新对应的 Markdown 文件
+- 尽量保留其余内容不变，除非解析器需要做格式整理
 
-## Error Handling
-Handle these cases explicitly:
-- GitHub login cancelled or denied
-- network offline while editing
-- file conflict because the same file changed on GitHub
-- missing or malformed markdown frontmatter
-- week path not found
+## 异常处理
+需要明确处理这些情况：
+- GitHub 登录被取消或拒绝
+- 编辑时网络不可用
+- 同一个文件在 GitHub 上已经被别人或别的设备改过
+- Markdown frontmatter 缺失或格式错误
+- 周记路径找不到
 
-Recovery behavior:
-- keep the local draft
-- show a clear sync status
-- retry upload after refetching the latest remote content when conflicts occur
+恢复策略：
+- 保留本地草稿
+- 显示清晰的同步状态
+- 发生冲突时先拉最新远端内容，再重试上传
 
-## Testing Scope
-Minimum tests:
-- markdown parse/regenerate round trip
-- week path resolution from date
-- new-week file creation logic
-- GitHub sync service tests with mocked responses
-- UI smoke coverage for diary and summary screens
+## 测试范围
+最少要测这些：
+- Markdown 解析和重新生成的往返一致性
+- 从日期计算周记路径
+- 新周记文件创建逻辑
+- GitHub 同步服务的 mock 测试
+- 日记页和总结页的基础 UI 冒烟测试
 
-## Out Of Scope For v1
-- backend service
-- social features
-- multiple blogs/accounts
-- rich media uploads beyond what the current markdown format already supports
-- full WYSIWYG editor
+## v1 不做的事
+- 后端服务
+- 社交功能
+- 多博客/多账号
+- 超出当前 Markdown 格式范围的富媒体上传
+- 完整的可视化富文本编辑器
 
-## Acceptance Criteria
-The app is done when:
-- the user can log in to GitHub
-- the user can read diary entries from the repository
-- the user can create and edit a diary entry on the phone
-- the app can create a new weekly file automatically
-- the app can push changes back to GitHub successfully
+## 验收标准
+这个 App 完成时，至少满足：
+- 用户可以登录 GitHub
+- 用户可以读取仓库里的日记内容
+- 用户可以在手机上新建和编辑日记
+- App 能自动创建新的周记文件
+- App 能把修改成功推回 GitHub
