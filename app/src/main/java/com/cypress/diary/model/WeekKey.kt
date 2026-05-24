@@ -15,7 +15,7 @@ data class WeekKey(
 
     companion object {
         fun from(date: LocalDate): WeekKey {
-            val weekIndex = ((date.dayOfMonth - 1) / 7) + 1
+            val weekIndex = (((date.dayOfMonth - 1) / 7) + 1).coerceAtMost(4)
             return WeekKey(date.year, date.monthValue, weekIndex)
         }
     }

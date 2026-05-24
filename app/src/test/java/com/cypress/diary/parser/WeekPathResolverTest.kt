@@ -19,7 +19,7 @@ class WeekPathResolverTest {
             resolver.resolve(LocalDate.of(2026, 2, 1)),
         )
         assertEquals(
-            "src/content/posts/summary/25year/10month/5week.md",
+            "src/content/posts/summary/25year/10month/4week.md",
             resolver.resolve(LocalDate.of(2025, 10, 31)),
         )
         assertEquals(

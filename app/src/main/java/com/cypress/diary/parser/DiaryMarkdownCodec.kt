@@ -116,7 +116,16 @@ class DiaryMarkdownCodec {
             if (week.intro.isNotBlank()) {
                 appendLine()
             }
-            append(week.days.joinToString("\n") { renderDay(it) })
+            append(renderDays(week.days))
+        }
+    }
+
+    private fun renderDays(days: List<DiaryDay>): String = buildString {
+        days.forEachIndexed { index, day ->
+            append(renderDay(day))
+            if (index != days.lastIndex) {
+                append(if (day.content.isBlank()) "\n\n" else "\n")
+            }
         }
     }
 

@@ -82,6 +82,50 @@ class DiaryMarkdownCodecTest {
     }
 
     @Test
+    fun rendersEmptyDaySectionsWithBlogSpacing() {
+        val week = DiaryWeek(
+            key = WeekKey(2026, 5, 4),
+            title = "第四周周记",
+            published = LocalDate.of(2026, 5, 22),
+            description = "第四周周记",
+            tags = listOf("周报", "总结"),
+            category = "周报",
+            draft = false,
+            days = listOf(
+                DiaryDay(LocalDate.of(2026, 5, 22), "  第一段内容"),
+                DiaryDay(LocalDate.of(2026, 5, 23), ""),
+                DiaryDay(LocalDate.of(2026, 5, 24), "  第二段内容"),
+            ),
+        )
+        val expected = """
+            ---
+            title: "第四周周记"
+            published: 2026-05-22
+            description: "第四周周记"
+            tags: ["周报", "总结"]
+            category: "周报"
+            draft: false
+            ---
+
+            # 第四周周记
+
+            ## 5.22
+
+              第一段内容
+            ## 5.23
+
+            ## 5.24
+
+              第二段内容
+        """.trimIndent()
+
+        val rendered = codec.render(week)
+
+        assertEquals(expected, rendered)
+        assertEquals(week, codec.parse(rendered))
+    }
+
+    @Test
     fun parsesFrontMatterAfterLeadingBlankLines() {
         val markdown = """
 
