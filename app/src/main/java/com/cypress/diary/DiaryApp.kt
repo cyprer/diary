@@ -2,6 +2,7 @@ package com.cypress.diary
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -32,22 +33,29 @@ import com.cypress.diary.model.DiaryDocumentType
 import com.cypress.diary.model.DiaryDay
 import com.cypress.diary.model.DiaryWeek
 import com.cypress.diary.model.WeekKey
+import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.parser.DiaryDocumentCodec
 import com.cypress.diary.parser.DiaryMarkdownCodec
 import com.cypress.diary.parser.WeekPathResolver
 import com.cypress.diary.quote.DailyQuoteRepository
+import com.cypress.diary.storage.AccountingRecordStore
 import com.cypress.diary.storage.AppAppearanceStore
+import com.cypress.diary.storage.AppModuleStore
 import com.cypress.diary.storage.DailyQuoteStore
 import com.cypress.diary.storage.DiaryDocumentCacheStore
 import com.cypress.diary.storage.DiaryWeekCacheStore
 import com.cypress.diary.storage.EditorDraftStore
 import com.cypress.diary.storage.SharedPreferencesPreferenceStore
 import com.cypress.diary.ui.components.AppBackground
+import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
 import com.cypress.diary.ui.sample.sampleDiaryWeeks
 import com.cypress.diary.ui.screens.DiaryScreen
 import com.cypress.diary.ui.screens.EditorScreen
 import com.cypress.diary.ui.screens.EditMode
+import com.cypress.diary.ui.screens.AccountingEditorScreen
+import com.cypress.diary.ui.screens.AccountingLedgerScreen
+import com.cypress.diary.ui.screens.AccountingStatsScreen
 import com.cypress.diary.ui.screens.ProfileScreen
 import com.cypress.diary.ui.screens.SummaryScreen
 import com.cypress.diary.ui.calendar.DiaryCalendarMode
@@ -60,6 +68,7 @@ import com.cypress.diary.ui.summary.weekSummaryDays
 import com.cypress.diary.ui.theme.DiaryTheme
 import com.cypress.diary.ui.theme.ThemePalette
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +79,9 @@ fun DiaryApp() {
     val configStore = remember(context) { GitHubConfigStore(context) }
     val appearanceStore = remember(context) {
         AppAppearanceStore(context.getSharedPreferences("app_appearance", android.content.Context.MODE_PRIVATE))
+    }
+    val moduleStore = remember(context) {
+        AppModuleStore(context.getSharedPreferences("app_module", android.content.Context.MODE_PRIVATE))
     }
     val weekCacheStore = remember(context) {
         DiaryWeekCacheStore(
@@ -91,6 +103,9 @@ fun DiaryApp() {
     val quoteStore = remember(context) {
         DailyQuoteStore(context.getSharedPreferences("daily_quotes", android.content.Context.MODE_PRIVATE))
     }
+    val accountingRecordStore = remember(context) {
+        AccountingRecordStore(context.getSharedPreferences("accounting_records", android.content.Context.MODE_PRIVATE))
+    }
     val repository = remember { GitHubDiaryRepository() }
     val quoteRepository = remember { DailyQuoteRepository() }
     val sampleWeeks = remember { sampleDiaryWeeks() }
@@ -101,6 +116,7 @@ fun DiaryApp() {
     val weekPathResolver = remember { WeekPathResolver() }
     val exportArchive = remember { DiaryExportArchive() }
     val scope = rememberCoroutineScope()
+    val initialModule = remember(moduleStore) { moduleStore.load() }
 
     var appearance by remember { mutableStateOf(appearanceStore.load()) }
     var githubConfig by remember { mutableStateOf(configStore.load()) }
@@ -113,7 +129,16 @@ fun DiaryApp() {
     var refreshVersion by rememberSaveable { mutableStateOf(0) }
 
     var selectedDateValue by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
-    var route by rememberSaveable { mutableStateOf(DiaryRoute.Diary.route) }
+    var activeModuleName by rememberSaveable { mutableStateOf(initialModule.name) }
+    var route by rememberSaveable {
+        mutableStateOf(
+            if (initialModule == AppModule.Accounting) {
+                DiaryRoute.Ledger.route
+            } else {
+                DiaryRoute.Diary.route
+            },
+        )
+    }
     var editorModeName by rememberSaveable { mutableStateOf(EditMode.Day.name) }
     var selectedSummaryPath by rememberSaveable { mutableStateOf<String?>(null) }
     var editorDocumentPath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -125,8 +150,14 @@ fun DiaryApp() {
     var profileHiddenTapCount by rememberSaveable { mutableStateOf(0) }
     var profileHiddenLastTapAt by rememberSaveable { mutableStateOf(0L) }
     var githubSettingsRevealSignal by rememberSaveable { mutableStateOf(0) }
+    var accountingRecords by remember { mutableStateOf(accountingRecordStore.loadRecords()) }
+    var accountingMonthValue by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var selectedAccountingRecordId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val selectedDate = LocalDate.parse(selectedDateValue)
+    val activeModule = AppModule.valueOf(activeModuleName)
+    val accountingMonth = YearMonth.parse(accountingMonthValue)
+    val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
     val sampleDocuments = remember(sampleWeeks) {
         sampleWeeks.mapNotNull { week ->
             val path = weekPathResolver.resolve(week.key)
@@ -210,6 +241,26 @@ fun DiaryApp() {
 
     fun refreshWeeks() {
         refreshVersion += 1
+    }
+
+    fun selectModule(module: AppModule) {
+        activeModuleName = module.name
+        moduleStore.save(module)
+        selectedAccountingRecordId = null
+        route = when (module) {
+            AppModule.Diary -> DiaryRoute.Diary.route
+            AppModule.Accounting -> DiaryRoute.Ledger.route
+        }
+    }
+
+    fun saveAccountingRecord(record: AccountingRecord) {
+        accountingRecordStore.upsert(record)
+        accountingRecords = accountingRecordStore.loadRecords()
+    }
+
+    fun deleteAccountingRecord(id: String) {
+        accountingRecordStore.delete(id)
+        accountingRecords = accountingRecordStore.loadRecords()
     }
 
     fun revealGitHubSettingsFromProfileTab() {
@@ -387,55 +438,55 @@ fun DiaryApp() {
                 containerColor = Color.Transparent,
                 bottomBar = {
                     NavigationBar {
-                        NavigationBarItem(
-                            selected = route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route,
-                            onClick = { route = DiaryRoute.Diary.route },
-                            icon = {
-                                Icon(
-                                    imageVector = DiaryRoute.Diary.icon,
-                                    contentDescription = DiaryRoute.Diary.label,
-                                )
-                            },
-                            label = { Text(DiaryRoute.Diary.label) },
-                        )
-                        NavigationBarItem(
-                            selected = route == DiaryRoute.Summary.route,
-                            onClick = { route = DiaryRoute.Summary.route },
-                            icon = {
-                                Icon(
-                                    imageVector = DiaryRoute.Summary.icon,
-                                    contentDescription = DiaryRoute.Summary.label,
-                                )
-                            },
-                            label = { Text(DiaryRoute.Summary.label) },
-                        )
-                        NavigationBarItem(
-                            selected = route == DiaryRoute.Profile.route,
-                            onClick = { route = DiaryRoute.Profile.route },
-                            icon = {
-                                Icon(
-                                    imageVector = DiaryRoute.Profile.icon,
-                                    contentDescription = DiaryRoute.Profile.label,
-                                )
-                            },
-                            label = { Text(DiaryRoute.Profile.label) },
-                        )
+                        DiaryRoute.rootRoutesFor(activeModule).forEach { rootRoute ->
+                            NavigationBarItem(
+                                selected = when (rootRoute) {
+                                    DiaryRoute.Diary -> route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route
+                                    DiaryRoute.Ledger -> route == DiaryRoute.Ledger.route ||
+                                        route == DiaryRoute.AccountingEditor.route
+                                    else -> route == rootRoute.route
+                                },
+                                onClick = { route = rootRoute.route },
+                                icon = {
+                                    Icon(
+                                        imageVector = rootRoute.icon,
+                                        contentDescription = rootRoute.label,
+                                    )
+                                },
+                                label = { Text(rootRoute.label) },
+                            )
+                        }
                     }
                 },
                 floatingActionButton = {
-                    if (route == DiaryRoute.Diary.route) {
-                        FloatingActionButton(
-                            onClick = {
-                                editorDocumentPath = null
-                                editorDocumentFallback = null
-                                editorModeName = EditMode.Day.name
-                                route = DiaryRoute.Editor.route
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = "编辑",
-                            )
+                    when {
+                        activeModule == AppModule.Diary && route == DiaryRoute.Diary.route -> {
+                            FloatingActionButton(
+                                onClick = {
+                                    editorDocumentPath = null
+                                    editorDocumentFallback = null
+                                    editorModeName = EditMode.Day.name
+                                    route = DiaryRoute.Editor.route
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = "编辑",
+                                )
+                            }
+                        }
+                        activeModule == AppModule.Accounting && route == DiaryRoute.Ledger.route -> {
+                            FloatingActionButton(
+                                onClick = {
+                                    selectedAccountingRecordId = null
+                                    route = DiaryRoute.AccountingEditor.route
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "记一笔",
+                                )
+                            }
                         }
                     }
                 },
@@ -482,6 +533,8 @@ fun DiaryApp() {
                     )
 
                     DiaryRoute.Profile.route -> ProfileScreen(
+                        currentModule = activeModule,
+                        onModuleSelected = ::selectModule,
                         selectedPalette = palette,
                         onPaletteSelected = {
                             persistAppearance(updatedPalette = it)
@@ -512,6 +565,51 @@ fun DiaryApp() {
                         },
                         onLayoutOpacityChange = { opacity ->
                             persistAppearance(layoutOpacity = opacity)
+                        },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+
+                    DiaryRoute.Ledger.route -> AccountingLedgerScreen(
+                        records = accountingRecords,
+                        selectedMonth = accountingMonth,
+                        onMonthChange = { month -> accountingMonthValue = month.toString() },
+                        onRecordSelected = { record ->
+                            selectedAccountingRecordId = record.id
+                            route = DiaryRoute.AccountingEditor.route
+                        },
+                        refreshing = false,
+                        onRefresh = {},
+                        modifier = Modifier.padding(innerPadding),
+                    )
+
+                    DiaryRoute.AccountingStats.route -> AccountingStatsScreen(
+                        records = accountingRecords,
+                        selectedMonth = accountingMonth,
+                        onMonthChange = { month -> accountingMonthValue = month.toString() },
+                        refreshing = false,
+                        onRefresh = {},
+                        modifier = Modifier.padding(innerPadding),
+                    )
+
+                    DiaryRoute.AccountingEditor.route -> AccountingEditorScreen(
+                        record = selectedAccountingRecord,
+                        refreshing = false,
+                        onRefresh = {},
+                        onBack = {
+                            selectedAccountingRecordId = null
+                            route = DiaryRoute.Ledger.route
+                        },
+                        onSave = { record ->
+                            saveAccountingRecord(record)
+                            selectedAccountingRecordId = null
+                            route = DiaryRoute.Ledger.route
+                            Toast.makeText(context, "账目已保存", Toast.LENGTH_SHORT).show()
+                        },
+                        onDelete = { id ->
+                            deleteAccountingRecord(id)
+                            selectedAccountingRecordId = null
+                            route = DiaryRoute.Ledger.route
+                            Toast.makeText(context, "账目已删除", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.padding(innerPadding),
                     )

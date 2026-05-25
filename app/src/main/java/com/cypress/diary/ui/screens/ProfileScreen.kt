@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.github.GitHubConfig
 import com.cypress.diary.ui.components.RefreshableScreen
+import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.theme.ThemePalette
 import java.time.LocalDate
 
@@ -57,6 +58,8 @@ private const val GitHubUnlockTapWindowMillis = 1_000L
 
 @Composable
 fun ProfileScreen(
+    currentModule: AppModule,
+    onModuleSelected: (AppModule) -> Unit,
     selectedPalette: ThemePalette,
     onPaletteSelected: (ThemePalette) -> Unit,
     githubConfig: GitHubConfig?,
@@ -188,6 +191,28 @@ fun ProfileScreen(
                     )
                 }
             }
+        }
+
+        AccountCard {
+            Text("模块", fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AppModule.values().forEach { module ->
+                    FilterChip(
+                        selected = currentModule == module,
+                        onClick = { onModuleSelected(module) },
+                        label = { Text(module.label) },
+                    )
+                }
+            }
+            Text(
+                text = if (currentModule == AppModule.Diary) {
+                    "当前使用日记模块"
+                } else {
+                    "当前使用记账模块"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+            )
         }
 
         AccountCard {
