@@ -11,4 +11,20 @@ class DiaryRouteTest {
             DiaryRoute.rootRoutes.map { it.route },
         )
     }
+
+    @Test
+    fun diaryRootRoutesMatchDiaryWorkspace() {
+        assertEquals(
+            listOf(DiaryRoute.Diary, DiaryRoute.Summary, DiaryRoute.Profile),
+            DiaryRoute.rootRoutesFor(AppModule.Diary),
+        )
+    }
+
+    @Test
+    fun accountingRootRoutesMatchAccountingWorkspace() {
+        assertEquals(
+            listOf(DiaryRoute.Ledger, DiaryRoute.AccountingStats, DiaryRoute.Profile),
+            DiaryRoute.rootRoutesFor(AppModule.Accounting),
+        )
+    }
 }
