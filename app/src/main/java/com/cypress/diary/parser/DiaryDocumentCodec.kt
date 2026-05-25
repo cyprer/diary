@@ -14,22 +14,23 @@ class DiaryDocumentCodec {
         val normalized = markdown.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
         val lines = normalized.lines()
         val frontMatter = parseFrontMatter(lines)
-        val body = extractBody(lines, frontMatter.endIndex, frontMatter.title)
+        val rawBody = extractBody(lines, frontMatter.endIndex, frontMatter.title)
+        val type = when (documentPath) {
+            is SummaryDocumentPath.Year -> DiaryDocumentType.Year
+            is SummaryDocumentPath.Month -> DiaryDocumentType.Month
+            is SummaryDocumentPath.Week -> DiaryDocumentType.Week
+        }
 
         return DiaryDocument(
             path = path,
-            type = when (documentPath) {
-                is SummaryDocumentPath.Year -> DiaryDocumentType.Year
-                is SummaryDocumentPath.Month -> DiaryDocumentType.Month
-                is SummaryDocumentPath.Week -> DiaryDocumentType.Week
-            },
+            type = type,
             year = documentPath.year,
             month = documentPath.month,
             weekIndex = documentPath.weekIndex,
             title = frontMatter.title,
             published = frontMatter.published,
             markdown = markdown,
-            body = body,
+            body = if (type == DiaryDocumentType.Week) summaryBodyBeforeDaySections(rawBody) else rawBody,
         )
     }
 
@@ -76,6 +77,13 @@ class DiaryDocumentCodec {
         while (start <= end && lines[start].isBlank()) start++
         while (end >= start && lines[end].isBlank()) end--
         return if (start > end) emptyList() else lines.subList(start, end + 1)
+    }
+
+    private fun summaryBodyBeforeDaySections(body: String): String {
+        val lines = body.lines()
+        val daySectionIndex = lines.indexOfFirst { it.trimStart().startsWith("## ") }
+        val summaryLines = if (daySectionIndex >= 0) lines.take(daySectionIndex) else lines
+        return trimBlankLines(summaryLines).joinToString("\n")
     }
 
     private fun unquote(value: String): String {

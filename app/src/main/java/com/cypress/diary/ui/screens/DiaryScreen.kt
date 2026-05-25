@@ -113,7 +113,8 @@ private fun CalendarSwitcher(
         when (targetMode) {
             DiaryCalendarMode.Year -> CalendarYearPicker(
                 selectedDate = date,
-                onDateSelected = { selected ->
+                onYearChanged = onDateChange,
+                onMonthSelected = { selected ->
                     onDateChange(selected)
                     onCalendarModeChange(DiaryCalendarMode.Month)
                 },

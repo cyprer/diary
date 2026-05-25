@@ -24,9 +24,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.DiaryDocument
+import com.cypress.diary.model.DiaryDocumentType
 import com.cypress.diary.ui.summary.MonthSummary
 import com.cypress.diary.ui.summary.SummaryTree
 import com.cypress.diary.ui.summary.YearSummary
+import java.time.LocalDate
 
 @Composable
 fun WeekTree(
@@ -42,12 +44,12 @@ fun WeekTree(
             val yearExpanded = expansionState.isExpanded(yearKey)
             TreeRow(
                 title = "${year.year}年",
-                subtitle = year.document?.title ?: "暂无年度总结",
+                subtitle = year.document?.title ?: "点击创建年度总结",
                 expanded = yearExpanded,
                 level = 0,
-                selectable = year.document != null,
+                selectable = true,
                 onToggle = { expansionState.toggle(yearKey) },
-                onSelect = { year.document?.let(onDocumentSelected) },
+                onSelect = { onDocumentSelected(year.document ?: newYearDocument(year.year)) },
             )
             if (yearExpanded) {
                 YearContent(
@@ -72,12 +74,12 @@ private fun YearContent(
         val monthExpanded = expansionState.isExpanded(monthKey)
         TreeRow(
             title = "${month.month}月",
-            subtitle = month.document?.title ?: "暂无月总结",
+            subtitle = month.document?.title ?: "点击创建月总结",
             expanded = monthExpanded,
             level = 1,
-            selectable = month.document != null,
+            selectable = true,
             onToggle = { expansionState.toggle(monthKey) },
-            onSelect = { month.document?.let(onDocumentSelected) },
+            onSelect = { onDocumentSelected(month.document ?: newMonthDocument(month.year, month.month)) },
         )
         if (monthExpanded) {
             MonthContent(month = month, onDocumentSelected = onDocumentSelected)
@@ -201,4 +203,64 @@ private fun WeekRow(
             )
         }
     }
+}
+
+private fun newYearDocument(year: Int): DiaryDocument {
+    val title = "${year}年总结"
+    val path = "src/content/posts/summary/${year % 100}year/index.md"
+    val published = LocalDate.of(year, 1, 1)
+    return newSummaryDocument(
+        path = path,
+        type = DiaryDocumentType.Year,
+        year = year,
+        month = null,
+        weekIndex = null,
+        title = title,
+        published = published,
+    )
+}
+
+private fun newMonthDocument(year: Int, month: Int): DiaryDocument {
+    val title = "${year}年${month}月总结"
+    val path = "src/content/posts/summary/${year % 100}year/${month}month/index.md"
+    val published = LocalDate.of(year, month, 1)
+    return newSummaryDocument(
+        path = path,
+        type = DiaryDocumentType.Month,
+        year = year,
+        month = month,
+        weekIndex = null,
+        title = title,
+        published = published,
+    )
+}
+
+private fun newSummaryDocument(
+    path: String,
+    type: DiaryDocumentType,
+    year: Int,
+    month: Int?,
+    weekIndex: Int?,
+    title: String,
+    published: LocalDate,
+): DiaryDocument {
+    val markdown = """
+        ---
+        title: "${title}"
+        published: ${published}
+        ---
+
+        # ${title}
+    """.trimIndent()
+    return DiaryDocument(
+        path = path,
+        type = type,
+        year = year,
+        month = month,
+        weekIndex = weekIndex,
+        title = title,
+        published = published,
+        markdown = markdown,
+        body = "",
+    )
 }

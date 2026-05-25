@@ -9,12 +9,23 @@ class AppAppearanceStoreTest {
         val prefs = InMemoryPreferenceStore()
         val store = AppAppearanceStore(prefs)
 
-        store.save("Mint", "content://media/external/images/media/42")
+        store.save("Mint", "content://media/external/images/media/42", 0.62f)
 
         val loaded = store.load()
 
         assertEquals("Mint", loaded.paletteName)
         assertEquals("content://media/external/images/media/42", loaded.backgroundUri)
+        assertEquals(0.62f, loaded.layoutOpacity, 0.001f)
+    }
+
+    @Test
+    fun clampsSavedLayoutOpacity() {
+        val prefs = InMemoryPreferenceStore()
+        val store = AppAppearanceStore(prefs)
+
+        store.save("Mint", null, 0.1f)
+
+        assertEquals(0.35f, store.load().layoutOpacity, 0.001f)
     }
 
     private class InMemoryPreferenceStore : PreferenceStore {

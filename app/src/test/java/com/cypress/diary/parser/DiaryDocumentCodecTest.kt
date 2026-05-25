@@ -70,6 +70,6 @@ class DiaryDocumentCodecTest {
         assertEquals(1, document.month)
         assertEquals(1, document.weekIndex)
         assertEquals("第一周周记", document.title)
-        assertEquals("周开头。\n\n## 1.1\n\n第一天。", document.body.trim())
+        assertEquals("周开头。", document.body.trim())
     }
 }

@@ -2,12 +2,14 @@ package com.cypress.diary.storage
 
 import com.cypress.diary.model.DiaryDocument
 import com.cypress.diary.model.DiaryDocumentType
+import com.cypress.diary.parser.DiaryDocumentCodec
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.util.Base64
 
 class DiaryDocumentCacheStore(
     private val preferences: PreferenceStore,
+    private val codec: DiaryDocumentCodec = DiaryDocumentCodec(),
 ) {
     fun loadDocuments(): List<DiaryDocument> {
         return loadEncodedPaths().mapNotNull { encodedPath ->
@@ -60,17 +62,20 @@ class DiaryDocumentCacheStore(
     private fun decodeDocument(value: String): DiaryDocument {
         val lines = value.split('\n')
         require(lines.size == 9) { "invalid cached document" }
-        return DiaryDocument(
-            path = decode(lines[0]),
+        val path = decode(lines[0])
+        val markdown = decode(lines[7])
+        val decoded = DiaryDocument(
+            path = path,
             type = DiaryDocumentType.valueOf(lines[1]),
             year = lines[2].toInt(),
             month = lines[3].ifBlank { null }?.toInt(),
             weekIndex = lines[4].ifBlank { null }?.toInt(),
             published = LocalDate.parse(lines[5]),
             title = decode(lines[6]),
-            markdown = decode(lines[7]),
+            markdown = markdown,
             body = decode(lines[8]),
         )
+        return runCatching { codec.parse(path, markdown) }.getOrElse { decoded }
     }
 
     private fun cacheKey(encodedPath: String): String = "$KEY_PREFIX$encodedPath"

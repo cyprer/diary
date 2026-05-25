@@ -16,6 +16,18 @@ class EditorDraftStoreTest {
         assertEquals("week", store.load("src/content/posts/summary/25year/5month/4week.md#week"))
     }
 
+    @Test
+    fun indexesDraftsForExport() {
+        val prefs = InMemoryPreferenceStore()
+        val store = EditorDraftStore(prefs)
+
+        store.save("one", "alpha")
+        store.save("two", "beta")
+        store.clear("one")
+
+        assertEquals(mapOf("two" to "beta"), store.loadAll())
+    }
+
     private class InMemoryPreferenceStore : PreferenceStore {
         private val values = mutableMapOf<String, String?>()
 

@@ -12,7 +12,8 @@ class DateSelectionMathTest {
     }
 
     @Test
-    fun yearOptionsStartAt2025() {
-        assertEquals(listOf(2025, 2026, 2027), selectableYears(2025, 2027).toList())
+    fun yearOptionsUseLongRangeByDefault() {
+        assertEquals(2000, selectableYears().first)
+        assertEquals(2100, selectableYears().last)
     }
 }

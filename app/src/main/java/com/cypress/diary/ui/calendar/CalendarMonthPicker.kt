@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.cypress.diary.ui.state.clampDay
 import java.time.LocalDate
 import java.time.YearMonth
+
+private const val CalendarYearStart = 2000
+private const val CalendarYearEnd = 2100
 
 enum class DiaryCalendarMode(val label: String) {
     Year("年"),
@@ -197,12 +202,36 @@ fun CalendarModeTabs(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CalendarYearPicker(
     selectedDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
+    onYearChanged: (LocalDate) -> Unit,
+    onMonthSelected: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val yearCount = CalendarYearEnd - CalendarYearStart + 1
+    val pagerState = rememberPagerState(
+        initialPage = (selectedDate.year - CalendarYearStart).coerceIn(0, yearCount - 1),
+    ) { yearCount }
+
+    LaunchedEffect(selectedDate.year) {
+        val targetPage = (selectedDate.year - CalendarYearStart).coerceIn(0, yearCount - 1)
+        if (pagerState.currentPage != targetPage) {
+            pagerState.scrollToPage(targetPage)
+        }
+    }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .collect { page ->
+                val year = CalendarYearStart + page
+                if (year != selectedDate.year) {
+                    onYearChanged(selectedDate.withYearClamped(year))
+                }
+            }
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
@@ -218,7 +247,10 @@ fun CalendarYearPicker(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(onClick = { onDateSelected(selectedDate.withYear(selectedDate.year - 1)) }) {
+                IconButton(
+                    enabled = selectedDate.year > CalendarYearStart,
+                    onClick = { onYearChanged(selectedDate.withYearClamped(selectedDate.year - 1)) },
+                ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上一年")
                 }
                 Text(
@@ -226,38 +258,55 @@ fun CalendarYearPicker(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                IconButton(onClick = { onDateSelected(selectedDate.withYear(selectedDate.year + 1)) }) {
+                IconButton(
+                    enabled = selectedDate.year < CalendarYearEnd,
+                    onClick = { onYearChanged(selectedDate.withYearClamped(selectedDate.year + 1)) },
+                ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下一年")
                 }
             }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            VerticalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+            ) { page ->
+                val year = CalendarYearStart + page
+                YearMonthGrid(
+                    year = year,
+                    selectedDate = selectedDate,
+                    onMonthSelected = onMonthSelected,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun YearMonthGrid(
+    year: Int,
+    selectedDate: LocalDate,
+    onMonthSelected: (LocalDate) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        calendarYearMonths(year).chunked(3).forEach { rowMonths ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                ((selectedDate.year - 1)..(selectedDate.year + 1)).forEach { year ->
-                    Text(
-                        text = "${year}年",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                rowMonths.forEach { month ->
+                    MonthCell(
+                        month = month,
+                        selected = month.year == selectedDate.year && month.monthValue == selectedDate.monthValue,
+                        onClick = {
+                            val day = clampDay(month.year, month.monthValue, selectedDate.dayOfMonth)
+                            onMonthSelected(LocalDate.of(month.year, month.monthValue, day))
+                        },
+                        modifier = Modifier.weight(1f),
                     )
-                    calendarYearMonths(year).chunked(3).forEach { rowMonths ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            rowMonths.forEach { month ->
-                                MonthCell(
-                                    month = month,
-                                    selected = month.year == selectedDate.year && month.monthValue == selectedDate.monthValue,
-                                    onClick = {
-                                        val day = clampDay(month.year, month.monthValue, selectedDate.dayOfMonth)
-                                        onDateSelected(LocalDate.of(month.year, month.monthValue, day))
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -447,4 +496,10 @@ private fun LocalDate.plusMonthsClamped(delta: Long): LocalDate {
     val nextMonth = YearMonth.from(this).plusMonths(delta)
     val nextDay = clampDay(nextMonth.year, nextMonth.monthValue, dayOfMonth)
     return LocalDate.of(nextMonth.year, nextMonth.monthValue, nextDay)
+}
+
+private fun LocalDate.withYearClamped(year: Int): LocalDate {
+    val clampedYear = year.coerceIn(CalendarYearStart, CalendarYearEnd)
+    val nextDay = clampDay(clampedYear, monthValue, dayOfMonth)
+    return LocalDate.of(clampedYear, monthValue, nextDay)
 }

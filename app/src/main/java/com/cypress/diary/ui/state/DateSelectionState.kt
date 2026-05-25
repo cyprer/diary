@@ -27,6 +27,6 @@ fun clampDay(year: Int, month: Int, day: Int): Int {
     return minOf(day, maxDay)
 }
 
-fun selectableYears(startYear: Int = 2025, endYear: Int = 2035): IntRange {
+fun selectableYears(startYear: Int = 2000, endYear: Int = 2100): IntRange {
     return startYear..endYear
 }

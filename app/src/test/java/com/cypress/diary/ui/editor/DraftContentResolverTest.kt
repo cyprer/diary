@@ -2,9 +2,9 @@ package com.cypress.diary.ui.editor
 
 import com.cypress.diary.model.DiaryDocument
 import com.cypress.diary.model.DiaryDocumentType
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.LocalDate
 
 class DraftContentResolverTest {
     private val resolver = DraftContentResolver()
@@ -32,28 +32,62 @@ class DraftContentResolverTest {
     }
 
     @Test
-    fun documentUsesLocalMarkdownDraftBeforeRemoteDocument() {
+    fun documentUsesLocalBodyDraftBeforeRemoteDocument() {
         val remote = document(title = "远程标题", body = "远程内容")
-        val draft = """
-            ---
-            title: "本地标题"
-            published: 2025-01-01
-            description: "本地标题"
-            tags: ["周报", "总结"]
-            category: "周报"
-            draft: false
-            ---
 
-            # 本地标题
+        val resolved = requireNotNull(resolver.resolveDocument(remote, "本地总结内容"))
 
-            本地草稿内容
-        """.trimIndent()
+        assertEquals("远程标题", resolved.title)
+        assertEquals("本地总结内容", resolved.body.trim())
+        assertEquals(
+            """
+                # 远程标题
 
-        val resolved = requireNotNull(resolver.resolveDocument(remote, draft))
+                本地总结内容
+            """.trimIndent(),
+            resolved.markdown,
+        )
+    }
 
-        assertEquals("本地标题", resolved.title)
-        assertEquals("本地草稿内容", resolved.body.trim())
-        assertEquals(draft, resolved.markdown)
+    @Test
+    fun documentBodyDraftKeepsWeeklyDaySectionsHiddenFromEditor() {
+        val remote = document(title = "第一周周记", body = "周开头。").copy(
+            markdown = """
+                ---
+                title: "第一周周记"
+                published: 2025-01-01
+                ---
+
+                # 第一周周记
+
+                周开头。
+
+                ## 1.1
+
+                第一天。
+            """.trimIndent(),
+        )
+
+        val resolved = requireNotNull(resolver.resolveDocument(remote, "新的周结正文"))
+
+        assertEquals("新的周结正文", resolved.body)
+        assertEquals(
+            """
+                ---
+                title: "第一周周记"
+                published: 2025-01-01
+                ---
+
+                # 第一周周记
+
+                新的周结正文
+
+                ## 1.1
+
+                第一天。
+            """.trimIndent(),
+            resolved.markdown,
+        )
     }
 
     private fun document(title: String, body: String): DiaryDocument {

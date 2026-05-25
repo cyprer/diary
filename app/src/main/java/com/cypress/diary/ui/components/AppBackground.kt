@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AppBackground(
     backgroundUri: String?,
+    layoutOpacity: Float = 1f,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val context = LocalContext.current
@@ -49,13 +50,15 @@ fun AppBackground(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = appBackgroundScrimAlpha(hasImage))),
+                .background(MaterialTheme.colorScheme.background.copy(alpha = appBackgroundScrimAlpha(hasImage, layoutOpacity))),
         )
 
         content()
     }
 }
 
-fun appBackgroundScrimAlpha(hasImage: Boolean): Float {
-    return if (hasImage) 0.56f else 1f
+fun appBackgroundScrimAlpha(hasImage: Boolean, layoutOpacity: Float = 1f): Float {
+    if (!hasImage) return 1f
+    val clamped = layoutOpacity.coerceIn(0.35f, 1f)
+    return 0.16f + (0.4f * clamped)
 }
