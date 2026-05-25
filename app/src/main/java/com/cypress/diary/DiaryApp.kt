@@ -440,12 +440,7 @@ fun DiaryApp() {
                     NavigationBar {
                         DiaryRoute.rootRoutesFor(activeModule).forEach { rootRoute ->
                             NavigationBarItem(
-                                selected = when (rootRoute) {
-                                    DiaryRoute.Diary -> route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route
-                                    DiaryRoute.Ledger -> route == DiaryRoute.Ledger.route ||
-                                        route == DiaryRoute.AccountingEditor.route
-                                    else -> route == rootRoute.route
-                                },
+                                selected = isBottomRouteSelected(rootRoute, route),
                                 onClick = { route = rootRoute.route },
                                 icon = {
                                     Icon(
@@ -720,6 +715,15 @@ private fun resolvePalette(name: String): ThemePalette {
 
 internal fun shouldFetchRemoteDiary(refreshVersion: Int): Boolean {
     return refreshVersion > 0
+}
+
+internal fun isBottomRouteSelected(rootRoute: DiaryRoute?, route: String): Boolean {
+    return when (rootRoute) {
+        null -> false
+        DiaryRoute.Diary -> route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route
+        DiaryRoute.Ledger -> route == DiaryRoute.Ledger.route || route == DiaryRoute.AccountingEditor.route
+        else -> route == rootRoute.route
+    }
 }
 
 internal fun updateDraftSnapshot(

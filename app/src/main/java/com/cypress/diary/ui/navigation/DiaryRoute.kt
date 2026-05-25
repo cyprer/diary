@@ -24,9 +24,12 @@ sealed class DiaryRoute(
     data object AccountingEditor : DiaryRoute("accounting_editor", "记一笔", Icons.Filled.Add)
 
     companion object {
-        val diaryRootRoutes = listOf(Diary, Summary, Profile)
-        val accountingRootRoutes = listOf(Ledger, AccountingStats, Profile)
-        val rootRoutes = diaryRootRoutes
+        val diaryRootRoutes: List<DiaryRoute>
+            get() = listOf(Diary, Summary, Profile)
+        val accountingRootRoutes: List<DiaryRoute>
+            get() = listOf(Ledger, AccountingStats, Profile)
+        val rootRoutes: List<DiaryRoute>
+            get() = diaryRootRoutes
 
         fun rootRoutesFor(module: AppModule): List<DiaryRoute> {
             return when (module) {
