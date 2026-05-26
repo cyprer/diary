@@ -274,6 +274,7 @@ fun DiaryApp() {
         route = when (module) {
             AppModule.Diary -> DiaryRoute.Diary.route
             AppModule.Accounting -> DiaryRoute.Ledger.route
+            AppModule.Todo -> DiaryRoute.TodoList.route
         }
     }
 

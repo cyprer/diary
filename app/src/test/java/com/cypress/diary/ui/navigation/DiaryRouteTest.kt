@@ -27,4 +27,12 @@ class DiaryRouteTest {
             DiaryRoute.rootRoutesFor(AppModule.Accounting),
         )
     }
+
+    @Test
+    fun todoRootRoutesMatchTodoWorkspace() {
+        assertEquals(
+            listOf(DiaryRoute.TodoList, DiaryRoute.Profile),
+            DiaryRoute.rootRoutesFor(AppModule.Todo),
+        )
+    }
 }

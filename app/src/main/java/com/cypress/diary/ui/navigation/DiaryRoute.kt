@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -22,12 +23,16 @@ sealed class DiaryRoute(
     data object Ledger : DiaryRoute("ledger", "账本", Icons.Filled.AccountBalanceWallet)
     data object AccountingStats : DiaryRoute("accounting_stats", "统计", Icons.Filled.BarChart)
     data object AccountingEditor : DiaryRoute("accounting_editor", "记一笔", Icons.Filled.Add)
+    data object TodoList : DiaryRoute("todo", "待办", Icons.Filled.CheckCircle)
+    data object TodoEditor : DiaryRoute("todo_editor", "编辑待办", Icons.Filled.Edit)
 
     companion object {
         val diaryRootRoutes: List<DiaryRoute>
             get() = listOf(Diary, Summary, Profile)
         val accountingRootRoutes: List<DiaryRoute>
             get() = listOf(Ledger, AccountingStats, Profile)
+        val todoRootRoutes: List<DiaryRoute>
+            get() = listOf(TodoList, Profile)
         val rootRoutes: List<DiaryRoute>
             get() = diaryRootRoutes
 
@@ -35,6 +40,7 @@ sealed class DiaryRoute(
             return when (module) {
                 AppModule.Diary -> diaryRootRoutes
                 AppModule.Accounting -> accountingRootRoutes
+                AppModule.Todo -> todoRootRoutes
             }
         }
     }

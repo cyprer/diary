@@ -22,6 +22,15 @@ class AppModuleStoreTest {
     }
 
     @Test
+    fun savesAndLoadsTodoModule() {
+        val store = AppModuleStore(InMemoryPreferenceStore())
+
+        store.save(AppModule.Todo)
+
+        assertEquals(AppModule.Todo, store.load())
+    }
+
+    @Test
     fun malformedValueFallsBackToDiary() {
         val prefs = InMemoryPreferenceStore()
         prefs.putString("app_module", "unknown")
