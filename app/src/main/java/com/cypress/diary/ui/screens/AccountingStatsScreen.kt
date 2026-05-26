@@ -1,11 +1,16 @@
 package com.cypress.diary.ui.screens
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -21,20 +26,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.accounting.AccountingCategoryTotal
-import com.cypress.diary.accounting.AccountingDayTotal
 import com.cypress.diary.accounting.AccountingMonthTotal
+import com.cypress.diary.accounting.AccountingWeekTotal
+import com.cypress.diary.accounting.accountingWeekRange
 import com.cypress.diary.accounting.categoryTotals
-import com.cypress.diary.accounting.dailyTotalsForDates
 import com.cypress.diary.accounting.formatAmountCents
 import com.cypress.diary.accounting.monthlySummary
 import com.cypress.diary.accounting.monthlyTotalsForYear
 import com.cypress.diary.accounting.recordsForMonth
 import com.cypress.diary.accounting.recordsForWeek
 import com.cypress.diary.accounting.recordsForYear
+import com.cypress.diary.accounting.sortRecordsForLedger
 import com.cypress.diary.accounting.summaryForRecords
+import com.cypress.diary.accounting.weeklyTotalsForMonth
 import com.cypress.diary.accounting.yearlySummary
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
@@ -107,19 +117,19 @@ private fun AccountingWeeklyStatsContent(
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
 ) {
-    val dates = weekDates(selectedDate)
+    val (startDate, endDate) = accountingWeekRange(selectedDate)
     val weeklyRecords = recordsForWeek(records, selectedDate)
     val summary = summaryForRecords(weeklyRecords)
 
     PeriodHeader(
-        title = "${dates.first().monthValue}月${dates.first().dayOfMonth}日 - ${dates.last().monthValue}月${dates.last().dayOfMonth}日",
+        title = "${startDate.monthValue}月${startDate.dayOfMonth}日 - ${endDate.monthValue}月${endDate.dayOfMonth}日",
         previousDescription = "上一周",
         nextDescription = "下一周",
-        onPrevious = { onDateChange(selectedDate.minusWeeks(1)) },
-        onNext = { onDateChange(selectedDate.plusWeeks(1)) },
+        onPrevious = { onDateChange(previousAccountingWeekDate(selectedDate)) },
+        onNext = { onDateChange(nextAccountingWeekDate(selectedDate)) },
     )
     SummaryCard("周账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
-    DayTrendSection("每日趋势", dailyTotalsForDates(weeklyRecords, dates))
+    AccountingRecordListSection("账单记录", weeklyRecords)
     CategoryTotalSection("本周支出分类", categoryTotals(weeklyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("本周收入分类", categoryTotals(weeklyRecords, AccountingRecordType.Income))
 }
@@ -131,9 +141,9 @@ private fun AccountingMonthlyStatsContent(
     onDateChange: (LocalDate) -> Unit,
 ) {
     val month = YearMonth.from(selectedDate)
-    val dates = (1..month.lengthOfMonth()).map { month.atDay(it) }
     val monthlyRecords = recordsForMonth(records, month)
     val summary = monthlySummary(records, month)
+    val weeklyTotals = weeklyTotalsForMonth(records, month)
 
     PeriodHeader(
         title = "${month.year}年${month.monthValue}月",
@@ -143,7 +153,7 @@ private fun AccountingMonthlyStatsContent(
         onNext = { onDateChange(selectedDate.plusMonthsClamped(1)) },
     )
     SummaryCard("月账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
-    DayTrendSection("每日趋势", dailyTotalsForDates(monthlyRecords, dates))
+    WeeklyExpenseLineChartSection(weeklyTotals)
     CategoryTotalSection("本月支出分类", categoryTotals(monthlyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("本月收入分类", categoryTotals(monthlyRecords, AccountingRecordType.Income))
 }
@@ -166,7 +176,7 @@ private fun AccountingYearlyStatsContent(
         onNext = { onDateChange(selectedDate.plusYears(1)) },
     )
     SummaryCard("年账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
-    YearMonthTrendSection(monthlyTotalsForYear(records, selectedYear))
+    YearlyExpenseLineChartSection(monthlyTotalsForYear(records, selectedYear))
     CategoryTotalSection("年度支出分类", categoryTotals(yearlyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("年度收入分类", categoryTotals(yearlyRecords, AccountingRecordType.Income))
 }
@@ -211,8 +221,7 @@ private fun SummaryCard(title: String, incomeCents: Long, expenseCents: Long, ba
 }
 
 @Composable
-private fun DayTrendSection(title: String, totals: List<AccountingDayTotal>) {
-    val maxExpense = totals.maxOfOrNull { it.expenseCents } ?: 0L
+private fun AccountingRecordListSection(title: String, records: List<AccountingRecord>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
@@ -220,66 +229,145 @@ private fun DayTrendSection(title: String, totals: List<AccountingDayTotal>) {
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold)
-            totals.forEach { total ->
-                TrendRow(
-                    label = "${total.date.monthValue}/${total.date.dayOfMonth}",
-                    incomeCents = total.incomeCents,
-                    expenseCents = total.expenseCents,
-                    balanceCents = total.balanceCents,
-                    maxExpense = maxExpense,
-                )
+            if (records.isEmpty()) {
+                Text("暂无账单记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f))
+            } else {
+                sortRecordsForLedger(records).forEach { record ->
+                    AccountingStatsRecordRow(record)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun YearMonthTrendSection(totals: List<AccountingMonthTotal>) {
-    val maxExpense = totals.maxOfOrNull { it.expenseCents } ?: 0L
+private fun AccountingStatsRecordRow(record: AccountingRecord) {
+    val typeLabel = if (record.type == AccountingRecordType.Income) "收入" else "支出"
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("${record.date.monthValue}/${record.date.dayOfMonth} $typeLabel · ${record.category}", fontWeight = FontWeight.SemiBold)
+            Text("¥${formatAmountCents(record.amountCents)}")
+        }
+        if (record.note.isNotBlank()) {
+            Text(
+                record.note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeeklyExpenseLineChartSection(totals: List<AccountingWeekTotal>) {
+    ExpenseLineChartSection(
+        title = "支出折线",
+        points = totals.map { total -> ExpenseChartPoint("第${total.weekNumber}周", total.expenseCents) },
+    )
+}
+
+@Composable
+private fun YearlyExpenseLineChartSection(totals: List<AccountingMonthTotal>) {
+    ExpenseLineChartSection(
+        title = "支出折线",
+        points = totals.map { total -> ExpenseChartPoint("${total.month.monthValue}月", total.expenseCents) },
+        chartWidth = 720.dp,
+        horizontallyScrollable = true,
+    )
+}
+
+@Composable
+private fun ExpenseLineChartSection(
+    title: String,
+    points: List<ExpenseChartPoint>,
+    chartWidth: Dp = 320.dp,
+    horizontallyScrollable: Boolean = false,
+) {
+    val scrollState = rememberScrollState()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("月度趋势", fontWeight = FontWeight.SemiBold)
-            totals.forEach { total ->
-                TrendRow(
-                    label = "${total.month.monthValue}月",
-                    incomeCents = total.incomeCents,
-                    expenseCents = total.expenseCents,
-                    balanceCents = total.balanceCents,
-                    maxExpense = maxExpense,
-                )
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                "最高支出 ¥${formatAmountCents(points.maxOfOrNull { it.expenseCents } ?: 0L)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            )
+            val chartModifier = if (horizontallyScrollable) {
+                Modifier
+                    .horizontalScroll(scrollState)
+                    .width(chartWidth)
+            } else {
+                Modifier.fillMaxWidth()
             }
+            ExpenseLineChart(points = points, modifier = chartModifier)
         }
     }
 }
 
 @Composable
-private fun TrendRow(
-    label: String,
-    incomeCents: Long,
-    expenseCents: Long,
-    balanceCents: Long,
-    maxExpense: Long,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, fontWeight = FontWeight.SemiBold)
-            Text("收 ¥${formatAmountCents(incomeCents)} / 支 ¥${formatAmountCents(expenseCents)}", style = MaterialTheme.typography.bodySmall)
+private fun ExpenseLineChart(points: List<ExpenseChartPoint>, modifier: Modifier = Modifier) {
+    val lineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+    val axisColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+    val maxExpense = points.maxOfOrNull { it.expenseCents } ?: 0L
+    val midExpense = maxExpense / 2
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.height(150.dp).width(58.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End,
+            ) {
+                Text(formatCompactAmount(maxExpense), style = MaterialTheme.typography.bodySmall, color = labelColor)
+                Text(formatCompactAmount(midExpense), style = MaterialTheme.typography.bodySmall, color = labelColor)
+                Text("0", style = MaterialTheme.typography.bodySmall, color = labelColor)
+            }
+            Canvas(modifier = Modifier.weight(1f).height(150.dp)) {
+                val graphTop = 8.dp.toPx()
+                val graphBottom = size.height - 12.dp.toPx()
+                val graphHeight = graphBottom - graphTop
+                val stepX = if (points.size <= 1) 0f else size.width / (points.size - 1).toFloat()
+                val chartPoints = points.mapIndexed { index, point ->
+                    val x = if (points.size <= 1) size.width / 2f else index * stepX
+                    val ratio = if (maxExpense == 0L) 0f else point.expenseCents.toFloat() / maxExpense.toFloat()
+                    val y = graphBottom - graphHeight * ratio
+                    Offset(x, y)
+                }
+
+                listOf(graphTop, graphTop + graphHeight / 2f, graphBottom).forEach { y ->
+                    drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                }
+                drawLine(axisColor, Offset(0f, graphTop), Offset(0f, graphBottom), strokeWidth = 1.dp.toPx())
+                drawLine(axisColor, Offset(0f, graphBottom), Offset(size.width, graphBottom), strokeWidth = 1.dp.toPx())
+                chartPoints.zipWithNext().forEach { (start, end) ->
+                    drawLine(lineColor, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                }
+                chartPoints.forEach { point ->
+                    drawCircle(lineColor, radius = 4.dp.toPx(), center = point)
+                }
+            }
         }
-        LinearProgressIndicator(
-            progress = { if (maxExpense == 0L) 0f else expenseCents.toFloat() / maxExpense.toFloat() },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            "结余 ¥${formatAmountCents(balanceCents)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 66.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            points.forEach { point ->
+                Text(point.label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+            }
+        }
     }
 }
+
+private data class ExpenseChartPoint(
+    val label: String,
+    val expenseCents: Long,
+)
 
 @Composable
 private fun CategoryTotalSection(title: String, totals: List<AccountingCategoryTotal>) {
@@ -306,13 +394,30 @@ private fun CategoryTotalSection(title: String, totals: List<AccountingCategoryT
     }
 }
 
-private fun weekDates(date: LocalDate): List<LocalDate> {
-    val start = date.minusDays((date.dayOfWeek.value % 7).toLong())
-    return (0..6).map { start.plusDays(it.toLong()) }
-}
-
 private fun LocalDate.plusMonthsClamped(delta: Long): LocalDate {
     val nextMonth = YearMonth.from(this).plusMonths(delta)
     val day = dayOfMonth.coerceAtMost(nextMonth.lengthOfMonth())
     return nextMonth.atDay(day)
+}
+
+private fun previousAccountingWeekDate(date: LocalDate): LocalDate {
+    return accountingWeekRange(date).first.minusDays(1)
+}
+
+private fun nextAccountingWeekDate(date: LocalDate): LocalDate {
+    return accountingWeekRange(date).second.plusDays(1)
+}
+
+private fun formatCompactAmount(cents: Long): String {
+    val amount = cents / 100.0
+    return when {
+        cents == 0L -> "0"
+        amount >= 10000 -> "${trimAmount(amount / 10000)}万"
+        else -> trimAmount(amount)
+    }
+}
+
+private fun trimAmount(amount: Double): String {
+    val rounded = String.format(java.util.Locale.US, "%.1f", amount)
+    return rounded.removeSuffix(".0")
 }

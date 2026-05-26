@@ -19,6 +19,15 @@ data class AccountingMonthTotal(
     val balanceCents: Long,
 )
 
+data class AccountingWeekTotal(
+    val weekNumber: Int,
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+    val incomeCents: Long,
+    val expenseCents: Long,
+    val balanceCents: Long,
+)
+
 data class AccountingDayTotal(
     val date: LocalDate,
     val incomeCents: Long,
@@ -36,9 +45,35 @@ fun recordsForMonth(records: List<AccountingRecord>, month: YearMonth): List<Acc
 }
 
 fun recordsForWeek(records: List<AccountingRecord>, selectedDate: LocalDate): List<AccountingRecord> {
-    val start = selectedDate.minusDays((selectedDate.dayOfWeek.value % 7).toLong())
-    val end = start.plusDays(6)
+    val (start, end) = accountingWeekRange(selectedDate)
     return records.filter { record -> !record.date.isBefore(start) && !record.date.isAfter(end) }
+}
+
+fun accountingWeekRange(selectedDate: LocalDate): Pair<LocalDate, LocalDate> {
+    val month = YearMonth.from(selectedDate)
+    val weekNumber = accountingWeekNumber(selectedDate)
+    val startDay = when (weekNumber) {
+        1 -> 1
+        2 -> 8
+        3 -> 15
+        else -> 22
+    }
+    val endDay = when (weekNumber) {
+        1 -> 7
+        2 -> 14
+        3 -> 21
+        else -> month.lengthOfMonth()
+    }
+    return month.atDay(startDay) to month.atDay(endDay)
+}
+
+fun accountingWeekNumber(date: LocalDate): Int {
+    return when (date.dayOfMonth) {
+        in 1..7 -> 1
+        in 8..14 -> 2
+        in 15..21 -> 3
+        else -> 4
+    }
 }
 
 fun summaryForRecords(records: List<AccountingRecord>): AccountingMonthSummary {
@@ -84,6 +119,37 @@ fun monthlyTotalsForYear(records: List<AccountingRecord>, year: Int): List<Accou
         val summary = monthlySummary(records, month)
         AccountingMonthTotal(
             month = month,
+            incomeCents = summary.incomeCents,
+            expenseCents = summary.expenseCents,
+            balanceCents = summary.balanceCents,
+        )
+    }
+}
+
+fun weeklyTotalsForMonth(records: List<AccountingRecord>, month: YearMonth): List<AccountingWeekTotal> {
+    return (1..4).map { weekNumber ->
+        val startDay = when (weekNumber) {
+            1 -> 1
+            2 -> 8
+            3 -> 15
+            else -> 22
+        }
+        val endDay = when (weekNumber) {
+            1 -> 7
+            2 -> 14
+            3 -> 21
+            else -> month.lengthOfMonth()
+        }
+        val startDate = month.atDay(startDay)
+        val endDate = month.atDay(endDay)
+        val weeklyRecords = records.filter { record ->
+            !record.date.isBefore(startDate) && !record.date.isAfter(endDate)
+        }
+        val summary = summaryForRecords(weeklyRecords)
+        AccountingWeekTotal(
+            weekNumber = weekNumber,
+            startDate = startDate,
+            endDate = endDate,
             incomeCents = summary.incomeCents,
             expenseCents = summary.expenseCents,
             balanceCents = summary.balanceCents,

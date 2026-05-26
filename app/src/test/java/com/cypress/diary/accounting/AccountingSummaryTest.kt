@@ -20,16 +20,16 @@ class AccountingSummaryTest {
     }
 
     @Test
-    fun filtersRecordsByCalendarWeek() {
+    fun filtersRecordsByMonthBoundAccountingWeek() {
         val records = listOf(
-            record("previous", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 23)),
-            record("sunday", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 24)),
-            record("monday", AccountingRecordType.Income, 200, "salary", LocalDate.of(2026, 5, 25)),
-            record("saturday", AccountingRecordType.Expense, 300, "food", LocalDate.of(2026, 5, 30)),
-            record("next", AccountingRecordType.Expense, 400, "food", LocalDate.of(2026, 5, 31)),
+            record("previous", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 21)),
+            record("first", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 22)),
+            record("middle", AccountingRecordType.Income, 200, "salary", LocalDate.of(2026, 5, 26)),
+            record("last", AccountingRecordType.Expense, 300, "food", LocalDate.of(2026, 5, 31)),
+            record("next", AccountingRecordType.Expense, 400, "food", LocalDate.of(2026, 6, 1)),
         )
 
-        assertEquals(listOf("sunday", "monday", "saturday"), recordsForWeek(records, LocalDate.of(2026, 5, 26)).map { it.id })
+        assertEquals(listOf("first", "middle", "last"), recordsForWeek(records, LocalDate.of(2026, 5, 26)).map { it.id })
     }
 
     @Test
@@ -92,6 +92,32 @@ class AccountingSummaryTest {
         assertEquals(0L, totals[1].incomeCents)
         assertEquals(0L, totals[1].expenseCents)
         assertEquals(0L, totals[1].balanceCents)
+    }
+
+    @Test
+    fun returnsFourWeeklyTotalsForMonth() {
+        val records = listOf(
+            record("week1", AccountingRecordType.Expense, 1000, "food", LocalDate.of(2026, 5, 7)),
+            record("week2", AccountingRecordType.Expense, 2000, "food", LocalDate.of(2026, 5, 8)),
+            record("week3", AccountingRecordType.Income, 9000, "salary", LocalDate.of(2026, 5, 21)),
+            record("week4", AccountingRecordType.Expense, 4000, "rent", LocalDate.of(2026, 5, 31)),
+            record("otherMonth", AccountingRecordType.Expense, 8000, "rent", LocalDate.of(2026, 6, 1)),
+        )
+
+        val totals = weeklyTotalsForMonth(records, YearMonth.of(2026, 5))
+
+        assertEquals(listOf(1, 2, 3, 4), totals.map { it.weekNumber })
+        assertEquals(
+            listOf(
+                LocalDate.of(2026, 5, 1) to LocalDate.of(2026, 5, 7),
+                LocalDate.of(2026, 5, 8) to LocalDate.of(2026, 5, 14),
+                LocalDate.of(2026, 5, 15) to LocalDate.of(2026, 5, 21),
+                LocalDate.of(2026, 5, 22) to LocalDate.of(2026, 5, 31),
+            ),
+            totals.map { it.startDate to it.endDate },
+        )
+        assertEquals(listOf(1000L, 2000L, 0L, 4000L), totals.map { it.expenseCents })
+        assertEquals(listOf(0L, 0L, 9000L, 0L), totals.map { it.incomeCents })
     }
 
     @Test
