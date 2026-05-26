@@ -33,6 +33,6 @@ fun monthLocalWeekDates(
     val yearMonth = YearMonth.of(year, month)
     val startDay = ((weekIndex - 1) * 7) + 1
     if (startDay > yearMonth.lengthOfMonth()) return emptyList()
-    val endDay = minOf(startDay + 6, yearMonth.lengthOfMonth())
+    val endDay = if (weekIndex >= 4) yearMonth.lengthOfMonth() else minOf(startDay + 6, yearMonth.lengthOfMonth())
     return (startDay..endDay).map { day -> yearMonth.atDay(day) }
 }
