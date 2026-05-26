@@ -16,4 +16,11 @@ class DiaryAppNavigationTest {
         assertTrue(isBottomRouteSelected(DiaryRoute.Diary, DiaryRoute.Editor.route))
         assertTrue(isBottomRouteSelected(DiaryRoute.Ledger, DiaryRoute.AccountingEditor.route))
     }
+
+    @Test
+    fun githubSearchQueryOpensHiddenSettings() {
+        assertTrue(isGitHubSettingsSearchQuery("github"))
+        assertTrue(isGitHubSettingsSearchQuery(" GitHub "))
+        assertFalse(isGitHubSettingsSearchQuery("github token"))
+    }
 }

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -50,6 +51,7 @@ fun DiaryScreen(
     searchQuery: String,
     searchResults: List<DiarySearchResult>,
     onSearchQueryChange: (String) -> Unit,
+    onSearchSubmit: () -> Unit,
     onSearchResultSelected: (DiarySearchResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -65,6 +67,7 @@ fun DiaryScreen(
             query = searchQuery,
             results = searchResults,
             onQueryChange = onSearchQueryChange,
+            onSearchSubmit = onSearchSubmit,
             onResultSelected = onSearchResultSelected,
         )
 
@@ -136,10 +139,11 @@ private fun SearchBox(
     query: String,
     results: List<DiarySearchResult>,
     onQueryChange: (String) -> Unit,
+    onSearchSubmit: () -> Unit,
     onResultSelected: (DiarySearchResult) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(0.92f),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedTextField(
@@ -148,8 +152,10 @@ private fun SearchBox(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(28.dp),
-            leadingIcon = {
-                Icon(Icons.Filled.Search, contentDescription = null)
+            trailingIcon = {
+                IconButton(onClick = onSearchSubmit) {
+                    Icon(Icons.Filled.Search, contentDescription = "搜索")
+                }
             },
             placeholder = { Text("搜索日记") },
         )

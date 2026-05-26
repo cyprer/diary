@@ -319,6 +319,14 @@ fun DiaryApp() {
         }
     }
 
+    fun submitDiarySearch() {
+        if (isGitHubSettingsSearchQuery(diarySearchQuery)) {
+            diarySearchQuery = ""
+            route = DiaryRoute.Profile.route
+            githubSettingsRevealSignal += 1
+        }
+    }
+
     fun exportDiary(uri: Uri) {
         scope.launch {
             val documents = documentsWithDraftsForExport(
@@ -616,6 +624,7 @@ fun DiaryApp() {
                         searchQuery = diarySearchQuery,
                         searchResults = diarySearchResults,
                         onSearchQueryChange = { diarySearchQuery = it },
+                        onSearchSubmit = ::submitDiarySearch,
                         onSearchResultSelected = { result ->
                             selectedDateValue = result.date.toString()
                             diarySearchQuery = ""
@@ -863,6 +872,10 @@ private fun resolvePalette(name: String): ThemePalette {
 
 internal fun shouldFetchRemoteDiary(refreshVersion: Int): Boolean {
     return refreshVersion > 0
+}
+
+internal fun isGitHubSettingsSearchQuery(query: String): Boolean {
+    return query.trim().equals("github", ignoreCase = true)
 }
 
 internal fun isBottomRouteSelected(rootRoute: DiaryRoute?, route: String): Boolean {
