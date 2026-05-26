@@ -28,6 +28,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.model.todo.TodoPriority
+import com.cypress.diary.todo.formatReminderMillis
+import com.cypress.diary.todo.isPastReminder
+import com.cypress.diary.todo.parseReminderMillis
+import com.cypress.diary.todo.reminderTextFor
 import com.cypress.diary.ui.components.RefreshableScreen
 import java.time.LocalDate
 import java.util.UUID
@@ -48,10 +52,16 @@ fun TodoEditorScreen(
     var note by rememberSaveable(item?.id) { mutableStateOf(item?.note.orEmpty()) }
     var priorityName by rememberSaveable(item?.id) { mutableStateOf(item?.priority?.name ?: TodoPriority.Medium.name) }
     var dueDateText by rememberSaveable(item?.id) { mutableStateOf(item?.dueDate?.toString().orEmpty()) }
+    var reminderText by rememberSaveable(item?.id) {
+        mutableStateOf(item?.reminderAtMillis?.let(::formatReminderMillis).orEmpty())
+    }
     var showDeleteConfirm by rememberSaveable(item?.id) { mutableStateOf(false) }
     val dueDate = dueDateText.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val dueDateInvalid = dueDateText.isNotBlank() && dueDate == null
-    val canSave = title.isNotBlank() && !dueDateInvalid
+    val reminderMillis = reminderText.takeIf { it.isNotBlank() }?.let(::parseReminderMillis)
+    val reminderInvalid = reminderText.isNotBlank() && reminderMillis == null
+    val reminderPast = reminderMillis?.let(::isPastReminder) == true
+    val canSave = title.isNotBlank() && !dueDateInvalid && !reminderInvalid && !reminderPast
     val priority = TodoPriority.valueOf(priorityName)
 
     RefreshableScreen(
@@ -128,6 +138,50 @@ fun TodoEditorScreen(
             },
         )
 
+        Text("提醒时间", fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = reminderText.isBlank(),
+                onClick = { reminderText = "" },
+                label = { Text("无提醒") },
+            )
+            FilterChip(
+                selected = reminderText == reminderTextFor(initialDate, 20, 0),
+                onClick = { reminderText = reminderTextFor(initialDate, 20, 0) },
+                label = { Text("今天 20:00") },
+            )
+            FilterChip(
+                selected = reminderText == reminderTextFor(initialDate.plusDays(1), 9, 0),
+                onClick = { reminderText = reminderTextFor(initialDate.plusDays(1), 9, 0) },
+                label = { Text("明天 09:00") },
+            )
+            if (dueDate != null) {
+                FilterChip(
+                    selected = reminderText == reminderTextFor(dueDate, 9, 0),
+                    onClick = { reminderText = reminderTextFor(dueDate, 9, 0) },
+                    label = { Text("截止日 09:00") },
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = reminderText,
+            onValueChange = { reminderText = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("提醒 YYYY-MM-DD HH:mm") },
+            singleLine = true,
+            isError = reminderInvalid || reminderPast,
+            supportingText = {
+                when {
+                    reminderInvalid -> Text("提醒格式示例：2026-05-26 20:00")
+                    reminderPast -> Text("提醒时间必须晚于当前时间")
+                }
+            },
+        )
+
         Text("优先级", fontWeight = FontWeight.SemiBold)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -152,6 +206,7 @@ fun TodoEditorScreen(
                         title = title.trim(),
                         note = note.trim(),
                         dueDate = dueDate,
+                        reminderAtMillis = reminderMillis,
                         priority = priority,
                         completed = item?.completed ?: false,
                         createdAt = item?.createdAt ?: now,

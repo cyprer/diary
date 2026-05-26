@@ -1,8 +1,12 @@
 package com.cypress.diary
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
@@ -28,7 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.cypress.diary.accounting.mergeAccountingRecords
 import com.cypress.diary.accounting.mergeAccountingCategories
 import com.cypress.diary.accounting.replaceAccountingRecords
@@ -63,6 +69,7 @@ import com.cypress.diary.storage.EditorDraftStore
 import com.cypress.diary.storage.SharedPreferencesPreferenceStore
 import com.cypress.diary.storage.TodoItemStore
 import com.cypress.diary.todo.TodoFilter
+import com.cypress.diary.todo.TodoReminderScheduler
 import com.cypress.diary.ui.components.AppBackground
 import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
@@ -130,6 +137,11 @@ fun DiaryApp() {
     val todoItemStore = remember(context) {
         TodoItemStore(context.getSharedPreferences("todo_items", android.content.Context.MODE_PRIVATE))
     }
+    val todoReminderScheduler = remember(context) { TodoReminderScheduler(context) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+    }
     val repository = remember { GitHubDiaryRepository() }
     val quoteRepository = remember { DailyQuoteRepository() }
     val editorBuilder = remember { DiaryEditContentBuilder() }
@@ -196,6 +208,22 @@ fun DiaryApp() {
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
     val selectedTodoItem = todoItems.firstOrNull { it.id == selectedTodoItemId }
     val todoFilter = TodoFilter.valueOf(todoFilterName)
+
+    LaunchedEffect(todoReminderScheduler) {
+        todoReminderScheduler.scheduleAll(todoItems)
+    }
+
+    LaunchedEffect(activeModule) {
+        if (
+            activeModule == AppModule.Todo &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val activeDocuments = resolveActiveDocuments(remoteDocuments, cachedDocuments, cachedWeeks, weekCodec)
     val exportSourceDocuments = activeDocuments
     val activeWeeks = remember(remoteDocuments, cachedDocuments, cachedWeeks) {
@@ -305,9 +333,11 @@ fun DiaryApp() {
     fun saveTodoItem(item: TodoItem) {
         todoItemStore.upsert(item)
         todoItems = todoItemStore.loadItems()
+        todoReminderScheduler.sync(item)
     }
 
     fun deleteTodoItem(id: String) {
+        todoReminderScheduler.cancel(id)
         todoItemStore.delete(id)
         todoItems = todoItemStore.loadItems()
     }

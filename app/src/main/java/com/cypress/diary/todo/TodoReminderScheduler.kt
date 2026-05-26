@@ -26,7 +26,7 @@ class TodoReminderScheduler(
     }
 
     fun cancel(id: String) {
-        alarmManager.cancel(reminderPendingIntent(id, PendingIntent.FLAG_NO_CREATE))
+        reminderPendingIntent(id, PendingIntent.FLAG_NO_CREATE)?.let(alarmManager::cancel)
     }
 
     private fun schedule(item: TodoItem) {
@@ -39,7 +39,7 @@ class TodoReminderScheduler(
             },
             pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
         )
-        val operation = reminderPendingIntent(item.id, PendingIntent.FLAG_UPDATE_CURRENT, item)
+        val operation = reminderPendingIntent(item.id, PendingIntent.FLAG_UPDATE_CURRENT, item) ?: return
         alarmManager.setAlarmClock(
             AlarmManager.AlarmClockInfo(reminderAt, showIntent),
             operation,
@@ -50,7 +50,7 @@ class TodoReminderScheduler(
         id: String,
         flags: Int,
         item: TodoItem? = null,
-    ): PendingIntent {
+    ): PendingIntent? {
         val intent = Intent(appContext, TodoReminderReceiver::class.java).apply {
             action = ACTION_TODO_REMINDER
             putExtra(EXTRA_TODO_ID, id)

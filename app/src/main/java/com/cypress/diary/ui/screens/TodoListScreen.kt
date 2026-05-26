@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.todo.TodoFilter
 import com.cypress.diary.todo.filterTodoItems
+import com.cypress.diary.todo.formatReminderMillis
 import com.cypress.diary.ui.components.RefreshableScreen
 import java.time.LocalDate
 
@@ -139,7 +140,8 @@ private fun TodoItemRow(
 
 private fun itemMetaText(item: TodoItem): String {
     val due = item.dueDate?.let { "${it.monthValue}月${it.dayOfMonth}日" } ?: "无截止日期"
-    return "$due · ${item.priority.label}"
+    val reminder = item.reminderAtMillis?.let { " · 提醒 ${formatReminderMillis(it)}" }.orEmpty()
+    return "$due · ${item.priority.label}$reminder"
 }
 
 private fun emptyText(filter: TodoFilter): String {
