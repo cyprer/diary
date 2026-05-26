@@ -3,6 +3,7 @@ package com.cypress.diary.accounting
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecordType
+import java.time.LocalDate
 import java.time.YearMonth
 
 data class AccountingMonthSummary(
@@ -18,6 +19,13 @@ data class AccountingMonthTotal(
     val balanceCents: Long,
 )
 
+data class AccountingDayTotal(
+    val date: LocalDate,
+    val incomeCents: Long,
+    val expenseCents: Long,
+    val balanceCents: Long,
+)
+
 data class AccountingCategoryTotal(
     val category: String,
     val amountCents: Long,
@@ -27,15 +35,24 @@ fun recordsForMonth(records: List<AccountingRecord>, month: YearMonth): List<Acc
     return records.filter { YearMonth.from(it.date) == month }
 }
 
-fun monthlySummary(records: List<AccountingRecord>, month: YearMonth): AccountingMonthSummary {
-    val monthlyRecords = recordsForMonth(records, month)
-    val income = monthlyRecords.filter { it.type == AccountingRecordType.Income }.sumOf { it.amountCents }
-    val expense = monthlyRecords.filter { it.type == AccountingRecordType.Expense }.sumOf { it.amountCents }
+fun recordsForWeek(records: List<AccountingRecord>, selectedDate: LocalDate): List<AccountingRecord> {
+    val start = selectedDate.minusDays((selectedDate.dayOfWeek.value % 7).toLong())
+    val end = start.plusDays(6)
+    return records.filter { record -> !record.date.isBefore(start) && !record.date.isAfter(end) }
+}
+
+fun summaryForRecords(records: List<AccountingRecord>): AccountingMonthSummary {
+    val income = records.filter { it.type == AccountingRecordType.Income }.sumOf { it.amountCents }
+    val expense = records.filter { it.type == AccountingRecordType.Expense }.sumOf { it.amountCents }
     return AccountingMonthSummary(
         incomeCents = income,
         expenseCents = expense,
         balanceCents = income - expense,
     )
+}
+
+fun monthlySummary(records: List<AccountingRecord>, month: YearMonth): AccountingMonthSummary {
+    return summaryForRecords(recordsForMonth(records, month))
 }
 
 fun recordsForYear(records: List<AccountingRecord>, year: Int): List<AccountingRecord> {
@@ -43,14 +60,22 @@ fun recordsForYear(records: List<AccountingRecord>, year: Int): List<AccountingR
 }
 
 fun yearlySummary(records: List<AccountingRecord>, year: Int): AccountingMonthSummary {
-    val yearlyRecords = recordsForYear(records, year)
-    val income = yearlyRecords.filter { it.type == AccountingRecordType.Income }.sumOf { it.amountCents }
-    val expense = yearlyRecords.filter { it.type == AccountingRecordType.Expense }.sumOf { it.amountCents }
-    return AccountingMonthSummary(
-        incomeCents = income,
-        expenseCents = expense,
-        balanceCents = income - expense,
-    )
+    return summaryForRecords(recordsForYear(records, year))
+}
+
+fun dailyTotalsForDates(
+    records: List<AccountingRecord>,
+    dates: List<LocalDate>,
+): List<AccountingDayTotal> {
+    return dates.map { date ->
+        val summary = summaryForRecords(records.filter { it.date == date })
+        AccountingDayTotal(
+            date = date,
+            incomeCents = summary.incomeCents,
+            expenseCents = summary.expenseCents,
+            balanceCents = summary.balanceCents,
+        )
+    }
 }
 
 fun monthlyTotalsForYear(records: List<AccountingRecord>, year: Int): List<AccountingMonthTotal> {

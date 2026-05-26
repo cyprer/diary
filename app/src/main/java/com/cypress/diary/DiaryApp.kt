@@ -83,7 +83,6 @@ import com.cypress.diary.ui.summary.weekSummaryDays
 import com.cypress.diary.ui.theme.DiaryTheme
 import com.cypress.diary.ui.theme.ThemePalette
 import java.time.LocalDate
-import java.time.YearMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -171,15 +170,18 @@ fun DiaryApp() {
     var githubSettingsRevealSignal by rememberSaveable { mutableStateOf(0) }
     var accountingRecords by remember { mutableStateOf(accountingRecordStore.loadRecords()) }
     var customAccountingCategories by remember { mutableStateOf(accountingCategoryStore.loadCategories()) }
-    var accountingMonthValue by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
-    var accountingYearValue by rememberSaveable { mutableStateOf(YearMonth.now().year) }
+    var accountingLedgerDateValue by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var accountingLedgerCalendarModeName by rememberSaveable { mutableStateOf(DiaryCalendarMode.Month.name) }
+    var accountingStatsDateValue by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var accountingStatsModeName by rememberSaveable { mutableStateOf(AccountingStatsMode.Month.name) }
     var selectedAccountingRecordId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingAccountingImportData by remember { mutableStateOf<AccountingArchiveData?>(null) }
 
     val selectedDate = LocalDate.parse(selectedDateValue)
     val activeModule = AppModule.valueOf(activeModuleName)
-    val accountingMonth = YearMonth.parse(accountingMonthValue)
+    val accountingLedgerDate = LocalDate.parse(accountingLedgerDateValue)
+    val accountingLedgerCalendarMode = DiaryCalendarMode.valueOf(accountingLedgerCalendarModeName)
+    val accountingStatsDate = LocalDate.parse(accountingStatsDateValue)
     val accountingStatsMode = AccountingStatsMode.valueOf(accountingStatsModeName)
     val accountingCategories = defaultAccountingCategories + customAccountingCategories
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
@@ -683,8 +685,10 @@ fun DiaryApp() {
 
                     DiaryRoute.Ledger.route -> AccountingLedgerScreen(
                         records = accountingRecords,
-                        selectedMonth = accountingMonth,
-                        onMonthChange = { month -> accountingMonthValue = month.toString() },
+                        selectedDate = accountingLedgerDate,
+                        onDateChange = { date -> accountingLedgerDateValue = date.toString() },
+                        calendarMode = accountingLedgerCalendarMode,
+                        onCalendarModeChange = { mode -> accountingLedgerCalendarModeName = mode.name },
                         onRecordSelected = { record ->
                             selectedAccountingRecordId = record.id
                             route = DiaryRoute.AccountingEditor.route
@@ -696,10 +700,8 @@ fun DiaryApp() {
 
                     DiaryRoute.AccountingStats.route -> AccountingStatsScreen(
                         records = accountingRecords,
-                        selectedMonth = accountingMonth,
-                        onMonthChange = { month -> accountingMonthValue = month.toString() },
-                        selectedYear = accountingYearValue,
-                        onYearChange = { year -> accountingYearValue = year },
+                        selectedDate = accountingStatsDate,
+                        onDateChange = { date -> accountingStatsDateValue = date.toString() },
                         mode = accountingStatsMode,
                         onModeChange = { mode -> accountingStatsModeName = mode.name },
                         refreshing = false,
@@ -711,6 +713,7 @@ fun DiaryApp() {
                         record = selectedAccountingRecord,
                         categories = accountingCategories,
                         onAddCategory = ::addAccountingCategory,
+                        initialDate = accountingLedgerDate,
                         refreshing = false,
                         onRefresh = {},
                         onBack = {

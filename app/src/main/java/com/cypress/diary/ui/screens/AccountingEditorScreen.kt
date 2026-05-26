@@ -41,6 +41,7 @@ fun AccountingEditorScreen(
     record: AccountingRecord?,
     categories: List<AccountingCategory>,
     onAddCategory: (AccountingRecordType, String) -> AccountingCategory,
+    initialDate: LocalDate,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
@@ -59,7 +60,7 @@ fun AccountingEditorScreen(
         mutableStateOf(record?.category ?: categories.firstOrNull { it.type == type }?.label.orEmpty())
     }
     var dateText by rememberSaveable(record?.id) {
-        mutableStateOf(record?.date?.toString() ?: LocalDate.now().toString())
+        mutableStateOf(record?.date?.toString() ?: initialDate.toString())
     }
     var note by rememberSaveable(record?.id) { mutableStateOf(record?.note.orEmpty()) }
     var showDeleteConfirm by rememberSaveable(record?.id) { mutableStateOf(false) }

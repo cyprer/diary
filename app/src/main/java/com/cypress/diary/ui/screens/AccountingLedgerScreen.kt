@@ -7,13 +7,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,21 +22,29 @@ import com.cypress.diary.accounting.recordsForMonth
 import com.cypress.diary.accounting.sortRecordsForLedger
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
+import com.cypress.diary.ui.calendar.CalendarModeTabs
+import com.cypress.diary.ui.calendar.CalendarMonthPicker
+import com.cypress.diary.ui.calendar.CalendarWeekPicker
+import com.cypress.diary.ui.calendar.CalendarYearPicker
+import com.cypress.diary.ui.calendar.DiaryCalendarMode
 import com.cypress.diary.ui.components.RefreshableScreen
+import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun AccountingLedgerScreen(
     records: List<AccountingRecord>,
-    selectedMonth: YearMonth,
-    onMonthChange: (YearMonth) -> Unit,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    calendarMode: DiaryCalendarMode,
+    onCalendarModeChange: (DiaryCalendarMode) -> Unit,
     onRecordSelected: (AccountingRecord) -> Unit,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val monthlyRecords = recordsForMonth(records, selectedMonth)
+    val selectedMonth = YearMonth.from(selectedDate)
+    val dayRecords = records.filter { it.date == selectedDate }
     val summary = monthlySummary(records, selectedMonth)
 
     RefreshableScreen(
@@ -51,60 +54,82 @@ fun AccountingLedgerScreen(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = { onMonthChange(selectedMonth.minusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上个月")
-            }
-            Text(
-                text = selectedMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            IconButton(onClick = { onMonthChange(selectedMonth.plusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下个月")
-            }
-        }
+        CalendarModeTabs(
+            selectedMode = calendarMode,
+            onModeSelected = onCalendarModeChange,
+        )
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        AccountingCalendarSwitcher(
+            mode = calendarMode,
+            date = selectedDate,
+            onDateChange = onDateChange,
+            onCalendarModeChange = onCalendarModeChange,
+        )
+
+        if (calendarMode != DiaryCalendarMode.Year) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
-                Text("本月概览", fontWeight = FontWeight.SemiBold)
-                Text("收入 ¥${formatAmountCents(summary.incomeCents)}")
-                Text("支出 ¥${formatAmountCents(summary.expenseCents)}")
-                Text("结余 ¥${formatAmountCents(summary.balanceCents)}")
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("本月概览", fontWeight = FontWeight.SemiBold)
+                    Text("收入 ¥${formatAmountCents(summary.incomeCents)}")
+                    Text("支出 ¥${formatAmountCents(summary.expenseCents)}")
+                    Text("结余 ¥${formatAmountCents(summary.balanceCents)}")
+                }
+            }
+
+            Text(
+                text = "${selectedDate.monthValue}月${selectedDate.dayOfMonth}日账单",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            if (dayRecords.isEmpty()) {
+                Text(
+                    text = "这天还没有账目",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+            } else {
+                sortRecordsForLedger(dayRecords).forEach { record ->
+                    AccountingRecordRow(record = record, onClick = { onRecordSelected(record) })
+                }
             }
         }
+    }
+}
 
-        if (monthlyRecords.isEmpty()) {
-            Text(
-                text = "这个月还没有账目",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-            )
-        } else {
-            sortRecordsForLedger(monthlyRecords)
-                .groupBy { it.date }
-                .forEach { (date, dayRecords) ->
-                    Text(
-                        text = "${date.monthValue}月${date.dayOfMonth}日",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    dayRecords.forEach { record ->
-                        AccountingRecordRow(record = record, onClick = { onRecordSelected(record) })
-                    }
-                }
-        }
+@Composable
+private fun AccountingCalendarSwitcher(
+    mode: DiaryCalendarMode,
+    date: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onCalendarModeChange: (DiaryCalendarMode) -> Unit,
+) {
+    when (mode) {
+        DiaryCalendarMode.Year -> CalendarYearPicker(
+            selectedDate = date,
+            onYearChanged = onDateChange,
+            onMonthSelected = { selected ->
+                onDateChange(selected)
+                onCalendarModeChange(DiaryCalendarMode.Month)
+            },
+        )
+
+        DiaryCalendarMode.Month -> CalendarMonthPicker(
+            selectedDate = date,
+            onDateSelected = onDateChange,
+        )
+
+        DiaryCalendarMode.Week -> CalendarWeekPicker(
+            selectedDate = date,
+            onDateSelected = onDateChange,
+        )
     }
 }
 

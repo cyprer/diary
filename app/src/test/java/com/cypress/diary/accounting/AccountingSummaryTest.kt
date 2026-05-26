@@ -20,6 +20,19 @@ class AccountingSummaryTest {
     }
 
     @Test
+    fun filtersRecordsByCalendarWeek() {
+        val records = listOf(
+            record("previous", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 23)),
+            record("sunday", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 24)),
+            record("monday", AccountingRecordType.Income, 200, "salary", LocalDate.of(2026, 5, 25)),
+            record("saturday", AccountingRecordType.Expense, 300, "food", LocalDate.of(2026, 5, 30)),
+            record("next", AccountingRecordType.Expense, 400, "food", LocalDate.of(2026, 5, 31)),
+        )
+
+        assertEquals(listOf("sunday", "monday", "saturday"), recordsForWeek(records, LocalDate.of(2026, 5, 26)).map { it.id })
+    }
+
+    @Test
     fun calculatesMonthlyTotals() {
         val records = listOf(
             record("a", AccountingRecordType.Expense, 1000, "food", LocalDate.of(2026, 5, 1)),
@@ -43,6 +56,42 @@ class AccountingSummaryTest {
         )
 
         assertEquals(listOf("a", "c"), recordsForYear(records, 2026).map { it.id })
+    }
+
+    @Test
+    fun calculatesSummaryForArbitraryRecords() {
+        val records = listOf(
+            record("expense", AccountingRecordType.Expense, 1200, "food", LocalDate.of(2026, 5, 24)),
+            record("income", AccountingRecordType.Income, 3000, "salary", LocalDate.of(2026, 5, 24)),
+        )
+
+        val summary = summaryForRecords(records)
+
+        assertEquals(3000L, summary.incomeCents)
+        assertEquals(1200L, summary.expenseCents)
+        assertEquals(1800L, summary.balanceCents)
+    }
+
+    @Test
+    fun returnsDailyTotalsForRequestedDates() {
+        val dates = listOf(
+            LocalDate.of(2026, 5, 24),
+            LocalDate.of(2026, 5, 25),
+        )
+        val records = listOf(
+            record("expense", AccountingRecordType.Expense, 1200, "food", dates[0]),
+            record("income", AccountingRecordType.Income, 3000, "salary", dates[0]),
+        )
+
+        val totals = dailyTotalsForDates(records, dates)
+
+        assertEquals(dates, totals.map { it.date })
+        assertEquals(3000L, totals[0].incomeCents)
+        assertEquals(1200L, totals[0].expenseCents)
+        assertEquals(1800L, totals[0].balanceCents)
+        assertEquals(0L, totals[1].incomeCents)
+        assertEquals(0L, totals[1].expenseCents)
+        assertEquals(0L, totals[1].balanceCents)
     }
 
     @Test

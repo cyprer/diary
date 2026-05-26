@@ -24,34 +24,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.accounting.AccountingCategoryTotal
+import com.cypress.diary.accounting.AccountingDayTotal
 import com.cypress.diary.accounting.AccountingMonthTotal
 import com.cypress.diary.accounting.categoryTotals
+import com.cypress.diary.accounting.dailyTotalsForDates
 import com.cypress.diary.accounting.formatAmountCents
 import com.cypress.diary.accounting.monthlySummary
 import com.cypress.diary.accounting.monthlyTotalsForYear
 import com.cypress.diary.accounting.recordsForMonth
+import com.cypress.diary.accounting.recordsForWeek
 import com.cypress.diary.accounting.recordsForYear
+import com.cypress.diary.accounting.summaryForRecords
 import com.cypress.diary.accounting.yearlySummary
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
 import com.cypress.diary.ui.components.RefreshableScreen
+import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 
 enum class AccountingStatsMode(
     val label: String,
 ) {
-    Month("月度"),
-    Year("年度"),
+    Week("周账"),
+    Month("月账"),
+    Year("年账"),
 }
 
 @Composable
 fun AccountingStatsScreen(
     records: List<AccountingRecord>,
-    selectedMonth: YearMonth,
-    onMonthChange: (YearMonth) -> Unit,
-    selectedYear: Int,
-    onYearChange: (Int) -> Unit,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
     mode: AccountingStatsMode,
     onModeChange: (AccountingStatsMode) -> Unit,
     refreshing: Boolean,
@@ -67,17 +70,9 @@ fun AccountingStatsScreen(
     ) {
         AccountingStatsModeSelector(mode = mode, onModeChange = onModeChange)
         when (mode) {
-            AccountingStatsMode.Month -> AccountingMonthlyStatsContent(
-                records = records,
-                selectedMonth = selectedMonth,
-                onMonthChange = onMonthChange,
-            )
-
-            AccountingStatsMode.Year -> AccountingYearlyStatsContent(
-                records = records,
-                selectedYear = selectedYear,
-                onYearChange = onYearChange,
-            )
+            AccountingStatsMode.Week -> AccountingWeeklyStatsContent(records, selectedDate, onDateChange)
+            AccountingStatsMode.Month -> AccountingMonthlyStatsContent(records, selectedDate, onDateChange)
+            AccountingStatsMode.Year -> AccountingYearlyStatsContent(records, selectedDate, onDateChange)
         }
     }
 }
@@ -94,17 +89,11 @@ private fun AccountingStatsModeSelector(
         AccountingStatsMode.values().forEach { option ->
             val modifier = Modifier.weight(1f)
             if (option == mode) {
-                Button(
-                    onClick = { onModeChange(option) },
-                    modifier = modifier,
-                ) {
+                Button(onClick = { onModeChange(option) }, modifier = modifier) {
                     Text(option.label)
                 }
             } else {
-                OutlinedButton(
-                    onClick = { onModeChange(option) },
-                    modifier = modifier,
-                ) {
+                OutlinedButton(onClick = { onModeChange(option) }, modifier = modifier) {
                     Text(option.label)
                 }
             }
@@ -113,65 +102,73 @@ private fun AccountingStatsModeSelector(
 }
 
 @Composable
-private fun AccountingMonthlyStatsContent(
+private fun AccountingWeeklyStatsContent(
     records: List<AccountingRecord>,
-    selectedMonth: YearMonth,
-    onMonthChange: (YearMonth) -> Unit,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
 ) {
-    val monthlyRecords = recordsForMonth(records, selectedMonth)
-    val summary = monthlySummary(records, selectedMonth)
-    val expenseTotals = categoryTotals(monthlyRecords, AccountingRecordType.Expense)
-    val incomeTotals = categoryTotals(monthlyRecords, AccountingRecordType.Income)
+    val dates = weekDates(selectedDate)
+    val weeklyRecords = recordsForWeek(records, selectedDate)
+    val summary = summaryForRecords(weeklyRecords)
 
     PeriodHeader(
-        title = selectedMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")),
+        title = "${dates.first().monthValue}月${dates.first().dayOfMonth}日 - ${dates.last().monthValue}月${dates.last().dayOfMonth}日",
+        previousDescription = "上一周",
+        nextDescription = "下一周",
+        onPrevious = { onDateChange(selectedDate.minusWeeks(1)) },
+        onNext = { onDateChange(selectedDate.plusWeeks(1)) },
+    )
+    SummaryCard("周账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
+    DayTrendSection("每日趋势", dailyTotalsForDates(weeklyRecords, dates))
+    CategoryTotalSection("本周支出分类", categoryTotals(weeklyRecords, AccountingRecordType.Expense))
+    CategoryTotalSection("本周收入分类", categoryTotals(weeklyRecords, AccountingRecordType.Income))
+}
+
+@Composable
+private fun AccountingMonthlyStatsContent(
+    records: List<AccountingRecord>,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+) {
+    val month = YearMonth.from(selectedDate)
+    val dates = (1..month.lengthOfMonth()).map { month.atDay(it) }
+    val monthlyRecords = recordsForMonth(records, month)
+    val summary = monthlySummary(records, month)
+
+    PeriodHeader(
+        title = "${month.year}年${month.monthValue}月",
         previousDescription = "上个月",
         nextDescription = "下个月",
-        onPrevious = { onMonthChange(selectedMonth.minusMonths(1)) },
-        onNext = { onMonthChange(selectedMonth.plusMonths(1)) },
+        onPrevious = { onDateChange(selectedDate.plusMonthsClamped(-1)) },
+        onNext = { onDateChange(selectedDate.plusMonthsClamped(1)) },
     )
-
-    SummaryCard(
-        title = "月度统计",
-        incomeCents = summary.incomeCents,
-        expenseCents = summary.expenseCents,
-        balanceCents = summary.balanceCents,
-    )
-
-    CategoryTotalSection("支出分类", expenseTotals)
-    CategoryTotalSection("收入分类", incomeTotals)
+    SummaryCard("月账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
+    DayTrendSection("每日趋势", dailyTotalsForDates(monthlyRecords, dates))
+    CategoryTotalSection("本月支出分类", categoryTotals(monthlyRecords, AccountingRecordType.Expense))
+    CategoryTotalSection("本月收入分类", categoryTotals(monthlyRecords, AccountingRecordType.Income))
 }
 
 @Composable
 private fun AccountingYearlyStatsContent(
     records: List<AccountingRecord>,
-    selectedYear: Int,
-    onYearChange: (Int) -> Unit,
+    selectedDate: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
 ) {
+    val selectedYear = selectedDate.year
     val yearlyRecords = recordsForYear(records, selectedYear)
     val summary = yearlySummary(records, selectedYear)
-    val monthlyTotals = monthlyTotalsForYear(records, selectedYear)
-    val expenseTotals = categoryTotals(yearlyRecords, AccountingRecordType.Expense)
-    val incomeTotals = categoryTotals(yearlyRecords, AccountingRecordType.Income)
 
     PeriodHeader(
         title = "${selectedYear}年",
         previousDescription = "上一年",
         nextDescription = "下一年",
-        onPrevious = { onYearChange(selectedYear - 1) },
-        onNext = { onYearChange(selectedYear + 1) },
+        onPrevious = { onDateChange(selectedDate.minusYears(1)) },
+        onNext = { onDateChange(selectedDate.plusYears(1)) },
     )
-
-    SummaryCard(
-        title = "年度总结",
-        incomeCents = summary.incomeCents,
-        expenseCents = summary.expenseCents,
-        balanceCents = summary.balanceCents,
-    )
-
-    YearMonthTrendSection(monthlyTotals)
-    CategoryTotalSection("年度支出分类", expenseTotals)
-    CategoryTotalSection("年度收入分类", incomeTotals)
+    SummaryCard("年账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
+    YearMonthTrendSection(monthlyTotalsForYear(records, selectedYear))
+    CategoryTotalSection("年度支出分类", categoryTotals(yearlyRecords, AccountingRecordType.Expense))
+    CategoryTotalSection("年度收入分类", categoryTotals(yearlyRecords, AccountingRecordType.Income))
 }
 
 @Composable
@@ -190,11 +187,7 @@ private fun PeriodHeader(
         IconButton(onClick = onPrevious) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = previousDescription)
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        Text(text = title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         IconButton(onClick = onNext) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = nextDescription)
         }
@@ -202,21 +195,13 @@ private fun PeriodHeader(
 }
 
 @Composable
-private fun SummaryCard(
-    title: String,
-    incomeCents: Long,
-    expenseCents: Long,
-    balanceCents: Long,
-) {
+private fun SummaryCard(title: String, incomeCents: Long, expenseCents: Long, balanceCents: Long) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold)
             Text("收入 ¥${formatAmountCents(incomeCents)}")
             Text("支出 ¥${formatAmountCents(expenseCents)}")
@@ -226,46 +211,94 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun YearMonthTrendSection(
-    totals: List<AccountingMonthTotal>,
-) {
+private fun DayTrendSection(title: String, totals: List<AccountingDayTotal>) {
     val maxExpense = totals.maxOfOrNull { it.expenseCents } ?: 0L
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            totals.forEach { total ->
+                TrendRow(
+                    label = "${total.date.monthValue}/${total.date.dayOfMonth}",
+                    incomeCents = total.incomeCents,
+                    expenseCents = total.expenseCents,
+                    balanceCents = total.balanceCents,
+                    maxExpense = maxExpense,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun YearMonthTrendSection(totals: List<AccountingMonthTotal>) {
+    val maxExpense = totals.maxOfOrNull { it.expenseCents } ?: 0L
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("月度趋势", fontWeight = FontWeight.SemiBold)
             totals.forEach { total ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("${total.month.monthValue}月", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "收 ¥${formatAmountCents(total.incomeCents)} / 支 ¥${formatAmountCents(total.expenseCents)}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                TrendRow(
+                    label = "${total.month.monthValue}月",
+                    incomeCents = total.incomeCents,
+                    expenseCents = total.expenseCents,
+                    balanceCents = total.balanceCents,
+                    maxExpense = maxExpense,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendRow(
+    label: String,
+    incomeCents: Long,
+    expenseCents: Long,
+    balanceCents: Long,
+    maxExpense: Long,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text("收 ¥${formatAmountCents(incomeCents)} / 支 ¥${formatAmountCents(expenseCents)}", style = MaterialTheme.typography.bodySmall)
+        }
+        LinearProgressIndicator(
+            progress = { if (maxExpense == 0L) 0f else expenseCents.toFloat() / maxExpense.toFloat() },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "结余 ¥${formatAmountCents(balanceCents)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        )
+    }
+}
+
+@Composable
+private fun CategoryTotalSection(title: String, totals: List<AccountingCategoryTotal>) {
+    val max = totals.maxOfOrNull { it.amountCents } ?: 0L
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            if (totals.isEmpty()) {
+                Text("暂无数据", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f))
+            } else {
+                totals.forEach { total ->
+                    Text("${total.category} ¥${formatAmountCents(total.amountCents)}")
                     LinearProgressIndicator(
-                        progress = {
-                            if (maxExpense == 0L) {
-                                0f
-                            } else {
-                                total.expenseCents.toFloat() / maxExpense.toFloat()
-                            }
-                        },
+                        progress = { if (max == 0L) 0f else total.amountCents.toFloat() / max.toFloat() },
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        "结余 ¥${formatAmountCents(total.balanceCents)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                     )
                 }
             }
@@ -273,43 +306,13 @@ private fun YearMonthTrendSection(
     }
 }
 
-@Composable
-private fun CategoryTotalSection(
-    title: String,
-    totals: List<AccountingCategoryTotal>,
-) {
-    val max = totals.maxOfOrNull { it.amountCents } ?: 0L
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            if (totals.isEmpty()) {
-                Text(
-                    text = "暂无数据",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-                )
-            } else {
-                totals.forEach { total ->
-                    Text("${total.category} ¥${formatAmountCents(total.amountCents)}")
-                    LinearProgressIndicator(
-                        progress = {
-                            if (max == 0L) {
-                                0f
-                            } else {
-                                total.amountCents.toFloat() / max.toFloat()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        }
-    }
+private fun weekDates(date: LocalDate): List<LocalDate> {
+    val start = date.minusDays((date.dayOfWeek.value % 7).toLong())
+    return (0..6).map { start.plusDays(it.toLong()) }
+}
+
+private fun LocalDate.plusMonthsClamped(delta: Long): LocalDate {
+    val nextMonth = YearMonth.from(this).plusMonths(delta)
+    val day = dayOfMonth.coerceAtMost(nextMonth.lengthOfMonth())
+    return nextMonth.atDay(day)
 }
