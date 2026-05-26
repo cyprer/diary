@@ -75,6 +75,7 @@ fun DiaryScreen(
         CalendarModeTabs(
             selectedMode = calendarMode,
             onModeSelected = onCalendarModeChange,
+            modifier = Modifier.fillMaxWidth(0.67f),
         )
 
         CalendarSwitcher(

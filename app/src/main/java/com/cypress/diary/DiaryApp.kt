@@ -530,6 +530,7 @@ fun DiaryApp() {
             documentCacheStore.saveDocuments(documents)
             weekCacheStore.saveWeeks(weeks)
             connectionStatus = "已连接 ${config.owner}/${config.repo}@${config.branch}，共 ${documents.size} 个总结文档"
+            Toast.makeText(context, "拉取成功", Toast.LENGTH_SHORT).show()
         }.onFailure { error ->
             remoteDocuments = null
             connectionStatus = "连接失败：${error.message ?: "未知错误"}"

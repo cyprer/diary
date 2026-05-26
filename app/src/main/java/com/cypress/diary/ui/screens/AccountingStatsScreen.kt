@@ -1,6 +1,7 @@
 package com.cypress.diary.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import com.cypress.diary.accounting.AccountingMonthTotal
 import com.cypress.diary.accounting.AccountingWeekTotal
 import com.cypress.diary.accounting.accountingWeekRange
 import com.cypress.diary.accounting.categoryTotals
+import com.cypress.diary.accounting.dailyTotalsForDates
 import com.cypress.diary.accounting.formatAmountCents
 import com.cypress.diary.accounting.monthlySummary
 import com.cypress.diary.accounting.monthlyTotalsForYear
@@ -81,8 +83,8 @@ fun AccountingStatsScreen(
         AccountingStatsModeSelector(mode = mode, onModeChange = onModeChange)
         when (mode) {
             AccountingStatsMode.Week -> AccountingWeeklyStatsContent(records, selectedDate, onDateChange)
-            AccountingStatsMode.Month -> AccountingMonthlyStatsContent(records, selectedDate, onDateChange)
-            AccountingStatsMode.Year -> AccountingYearlyStatsContent(records, selectedDate, onDateChange)
+            AccountingStatsMode.Month -> AccountingMonthlyStatsContent(records, selectedDate, onDateChange, onModeChange)
+            AccountingStatsMode.Year -> AccountingYearlyStatsContent(records, selectedDate, onDateChange, onModeChange)
         }
     }
 }
@@ -129,6 +131,12 @@ private fun AccountingWeeklyStatsContent(
         onNext = { onDateChange(nextAccountingWeekDate(selectedDate)) },
     )
     SummaryCard("周账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
+    DailyExpenseLineChartSection(
+        records = weeklyRecords,
+        startDate = startDate,
+        endDate = endDate,
+        onDateSelected = onDateChange,
+    )
     AccountingRecordListSection("账单记录", weeklyRecords)
     CategoryTotalSection("本周支出分类", categoryTotals(weeklyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("本周收入分类", categoryTotals(weeklyRecords, AccountingRecordType.Income))
@@ -139,6 +147,7 @@ private fun AccountingMonthlyStatsContent(
     records: List<AccountingRecord>,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onModeChange: (AccountingStatsMode) -> Unit,
 ) {
     val month = YearMonth.from(selectedDate)
     val monthlyRecords = recordsForMonth(records, month)
@@ -153,7 +162,13 @@ private fun AccountingMonthlyStatsContent(
         onNext = { onDateChange(selectedDate.plusMonthsClamped(1)) },
     )
     SummaryCard("月账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
-    WeeklyExpenseLineChartSection(weeklyTotals)
+    WeeklyExpenseLineChartSection(
+        totals = weeklyTotals,
+        onWeekSelected = { startDate ->
+            onDateChange(startDate)
+            onModeChange(AccountingStatsMode.Week)
+        },
+    )
     CategoryTotalSection("本月支出分类", categoryTotals(monthlyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("本月收入分类", categoryTotals(monthlyRecords, AccountingRecordType.Income))
 }
@@ -163,6 +178,7 @@ private fun AccountingYearlyStatsContent(
     records: List<AccountingRecord>,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onModeChange: (AccountingStatsMode) -> Unit,
 ) {
     val selectedYear = selectedDate.year
     val yearlyRecords = recordsForYear(records, selectedYear)
@@ -176,7 +192,14 @@ private fun AccountingYearlyStatsContent(
         onNext = { onDateChange(selectedDate.plusYears(1)) },
     )
     SummaryCard("年账", summary.incomeCents, summary.expenseCents, summary.balanceCents)
-    YearlyExpenseLineChartSection(monthlyTotalsForYear(records, selectedYear))
+    YearlyExpenseLineChartSection(
+        totals = monthlyTotalsForYear(records, selectedYear),
+        onMonthSelected = { month ->
+            val day = selectedDate.dayOfMonth.coerceAtMost(month.lengthOfMonth())
+            onDateChange(month.atDay(day))
+            onModeChange(AccountingStatsMode.Month)
+        },
+    )
     CategoryTotalSection("年度支出分类", categoryTotals(yearlyRecords, AccountingRecordType.Expense))
     CategoryTotalSection("年度收入分类", categoryTotals(yearlyRecords, AccountingRecordType.Income))
 }
@@ -259,20 +282,47 @@ private fun AccountingStatsRecordRow(record: AccountingRecord) {
 }
 
 @Composable
-private fun WeeklyExpenseLineChartSection(totals: List<AccountingWeekTotal>) {
+private fun DailyExpenseLineChartSection(
+    records: List<AccountingRecord>,
+    startDate: LocalDate,
+    endDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+) {
+    val dates = generateSequence(startDate) { date ->
+        date.plusDays(1).takeIf { !it.isAfter(endDate) }
+    }.toList()
     ExpenseLineChartSection(
         title = "支出折线",
-        points = totals.map { total -> ExpenseChartPoint("第${total.weekNumber}周", total.expenseCents) },
+        points = dailyTotalsForDates(records, dates).map { total ->
+            ExpenseChartPoint("${total.date.dayOfMonth}日", total.expenseCents, total.date)
+        },
+        onPointSelected = { point -> onDateSelected(point.targetDate) },
     )
 }
 
 @Composable
-private fun YearlyExpenseLineChartSection(totals: List<AccountingMonthTotal>) {
+private fun WeeklyExpenseLineChartSection(
+    totals: List<AccountingWeekTotal>,
+    onWeekSelected: (LocalDate) -> Unit,
+) {
     ExpenseLineChartSection(
         title = "支出折线",
-        points = totals.map { total -> ExpenseChartPoint("${total.month.monthValue}月", total.expenseCents) },
+        points = totals.map { total -> ExpenseChartPoint("第${total.weekNumber}周", total.expenseCents, total.startDate) },
+        onPointSelected = { point -> onWeekSelected(point.targetDate) },
+    )
+}
+
+@Composable
+private fun YearlyExpenseLineChartSection(
+    totals: List<AccountingMonthTotal>,
+    onMonthSelected: (YearMonth) -> Unit,
+) {
+    ExpenseLineChartSection(
+        title = "支出折线",
+        points = totals.map { total -> ExpenseChartPoint("${total.month.monthValue}月", total.expenseCents, total.month.atDay(1)) },
         chartWidth = 720.dp,
         horizontallyScrollable = true,
+        onPointSelected = { point -> onMonthSelected(YearMonth.from(point.targetDate)) },
     )
 }
 
@@ -282,6 +332,7 @@ private fun ExpenseLineChartSection(
     points: List<ExpenseChartPoint>,
     chartWidth: Dp = 320.dp,
     horizontallyScrollable: Boolean = false,
+    onPointSelected: (ExpenseChartPoint) -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -299,6 +350,7 @@ private fun ExpenseLineChartSection(
                 points = points,
                 chartWidth = chartWidth,
                 horizontallyScrollable = horizontallyScrollable,
+                onPointSelected = onPointSelected,
             )
         }
     }
@@ -309,6 +361,7 @@ private fun ExpenseLineChart(
     points: List<ExpenseChartPoint>,
     chartWidth: Dp,
     horizontallyScrollable: Boolean,
+    onPointSelected: (ExpenseChartPoint) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -367,7 +420,12 @@ private fun ExpenseLineChart(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     points.forEach { point ->
-                        Text(point.label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+                        Text(
+                            point.label,
+                            modifier = Modifier.clickable { onPointSelected(point) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = labelColor,
+                        )
                     }
                 }
             }
@@ -378,6 +436,7 @@ private fun ExpenseLineChart(
 private data class ExpenseChartPoint(
     val label: String,
     val expenseCents: Long,
+    val targetDate: LocalDate,
 )
 
 @Composable

@@ -1,6 +1,7 @@
 package com.cypress.diary.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -163,8 +164,8 @@ private fun DiarySummaryStatsPanel(
         ) {
             DiarySummaryStatsModeSelector(selectedMode, onModeChange)
             when (selectedMode) {
-                DiarySummaryStatsMode.Year -> DiaryYearStatsContent(tree, selectedDate, onDateChange)
-                DiarySummaryStatsMode.Month -> DiaryMonthStatsContent(tree, selectedDate, onDateChange)
+                DiarySummaryStatsMode.Year -> DiaryYearStatsContent(tree, selectedDate, onDateChange, onModeChange)
+                DiarySummaryStatsMode.Month -> DiaryMonthStatsContent(tree, selectedDate, onDateChange, onModeChange)
                 DiarySummaryStatsMode.Week -> DiaryWeekStatsContent(tree, selectedDate, onDateChange)
             }
         }
@@ -199,6 +200,7 @@ private fun DiaryYearStatsContent(
     tree: SummaryTree,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onModeChange: (DiarySummaryStatsMode) -> Unit,
 ) {
     val year = selectedDate.year
     SummaryStatsPeriodHeader(
@@ -213,6 +215,12 @@ private fun DiaryYearStatsContent(
         points = monthlyWordCountsForYear(tree, year),
         chartWidth = 720.dp,
         horizontallyScrollable = true,
+        onPointSelected = { index ->
+            val month = YearMonth.of(year, index + 1)
+            val day = selectedDate.dayOfMonth.coerceAtMost(month.lengthOfMonth())
+            onDateChange(month.atDay(day))
+            onModeChange(DiarySummaryStatsMode.Month)
+        },
     )
     SummaryDocumentContentSection(document = findYearSummaryDocument(tree, year))
 }
@@ -222,6 +230,7 @@ private fun DiaryMonthStatsContent(
     tree: SummaryTree,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onModeChange: (DiarySummaryStatsMode) -> Unit,
 ) {
     val month = YearMonth.from(selectedDate)
     SummaryStatsPeriodHeader(
@@ -234,6 +243,10 @@ private fun DiaryMonthStatsContent(
     SummaryWordLineChartSection(
         title = "字数折线",
         points = weeklyWordCountsForMonth(tree, month.year, month.monthValue),
+        onPointSelected = { index ->
+            onDateChange(month.atDay(1 + index * 7))
+            onModeChange(DiarySummaryStatsMode.Week)
+        },
     )
     SummaryDocumentContentSection(document = findMonthSummaryDocument(tree, month.year, month.monthValue))
 }
@@ -261,6 +274,17 @@ private fun DiaryWeekStatsContent(
         nextLabel = "下一周",
         onPrevious = { onDateChange(previousDiarySummaryWeekDate(selectedDate)) },
         onNext = { onDateChange(nextDiarySummaryWeekDate(selectedDate)) },
+    )
+    SummaryWordLineChartSection(
+        title = "字数折线",
+        points = if (dayCounts.isEmpty()) {
+            dates.map { date -> SummaryWordPoint("${date.dayOfMonth}日", 0) }
+        } else {
+            dayCounts.map { day -> SummaryWordPoint(day.label, day.wordCount) }
+        },
+        onPointSelected = { index ->
+            dates.getOrNull(index)?.let(onDateChange)
+        },
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("本周字数 $totalWordCount", fontWeight = FontWeight.SemiBold)
@@ -311,6 +335,7 @@ private fun SummaryWordLineChartSection(
     points: List<SummaryWordPoint>,
     chartWidth: Dp = 320.dp,
     horizontallyScrollable: Boolean = false,
+    onPointSelected: (Int) -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, fontWeight = FontWeight.SemiBold)
@@ -323,6 +348,7 @@ private fun SummaryWordLineChartSection(
             points = points,
             chartWidth = chartWidth,
             horizontallyScrollable = horizontallyScrollable,
+            onPointSelected = onPointSelected,
         )
     }
 }
@@ -332,6 +358,7 @@ private fun SummaryWordLineChart(
     points: List<SummaryWordPoint>,
     chartWidth: Dp,
     horizontallyScrollable: Boolean,
+    onPointSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -389,8 +416,13 @@ private fun SummaryWordLineChart(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    points.forEach { point ->
-                        Text(point.label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+                    points.forEachIndexed { index, point ->
+                        Text(
+                            point.label,
+                            modifier = Modifier.clickable { onPointSelected(index) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = labelColor,
+                        )
                     }
                 }
             }
