@@ -10,10 +10,10 @@ class SharedPreferencesPreferenceStore(
     }
 
     override fun putString(key: String, value: String?) {
-        prefs.edit().putString(key, value).apply()
+        prefs.edit().putString(key, value).commit()
     }
 
     override fun remove(key: String) {
-        prefs.edit().remove(key).apply()
+        prefs.edit().remove(key).commit()
     }
 }

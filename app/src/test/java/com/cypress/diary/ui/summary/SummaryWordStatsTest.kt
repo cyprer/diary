@@ -21,6 +21,15 @@ class SummaryWordStatsTest {
     }
 
     @Test
+    fun returnsWeekDayCountsWithTargetDates() {
+        val document = weekDocument(2026, 5, 2, body = "week summary", dayContent = "day content")
+
+        val counts = weekDayWordCounts(document)
+
+        assertEquals((8..14).map { LocalDate.of(2026, 5, it) }, counts.map { it.date })
+    }
+
+    @Test
     fun returnsFourWeeklyWordCountsForMonth() {
         val tree = SummaryTreeBuilder().build(
             listOf(

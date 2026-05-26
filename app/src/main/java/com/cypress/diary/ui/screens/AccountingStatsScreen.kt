@@ -373,11 +373,11 @@ private fun ExpenseLineChart(
     val midExpense = maxExpense / 2
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Column(
-                modifier = Modifier.height(150.dp).width(58.dp),
+                modifier = Modifier.height(150.dp).width(42.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.End,
+                horizontalAlignment = Alignment.Start,
             ) {
                 Text(formatCompactAmount(maxExpense), style = MaterialTheme.typography.bodySmall, color = labelColor)
                 Text(formatCompactAmount(midExpense), style = MaterialTheme.typography.bodySmall, color = labelColor)

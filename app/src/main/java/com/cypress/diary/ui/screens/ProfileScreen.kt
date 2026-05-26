@@ -53,7 +53,7 @@ import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.theme.ThemePalette
 import java.time.LocalDate
 
-private const val GitHubUnlockTapCount = 7
+private const val GitHubUnlockTapCount = 5
 private const val GitHubUnlockTapWindowMillis = 1_000L
 
 @Composable
@@ -65,6 +65,7 @@ fun ProfileScreen(
     githubConfig: GitHubConfig?,
     connectionStatus: String,
     githubSettingsRevealSignal: Int,
+    onGitHubSettingsRevealHandled: () -> Unit,
     backgroundUri: String?,
     layoutOpacity: Float,
     refreshing: Boolean,
@@ -104,6 +105,7 @@ fun ProfileScreen(
     LaunchedEffect(githubSettingsRevealSignal) {
         if (githubSettingsRevealSignal > 0) {
             showGitHubDialog = true
+            onGitHubSettingsRevealHandled()
         }
     }
 

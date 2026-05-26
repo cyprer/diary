@@ -26,6 +26,13 @@ class EditorDraftStore(
         saveKeys(loadKeys() - key)
     }
 
+    fun clearAll() {
+        loadKeys().forEach { key ->
+            preferences.remove(storageKey(key))
+        }
+        preferences.remove(KEY_INDEX)
+    }
+
     private fun storageKey(key: String): String = "editor_draft:$key"
 
     private fun loadKeys(): List<String> {

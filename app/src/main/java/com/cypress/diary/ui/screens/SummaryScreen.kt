@@ -1,6 +1,7 @@
 package com.cypress.diary.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.DiaryDocument
@@ -41,6 +46,9 @@ import com.cypress.diary.ui.summary.SummaryTree
 import com.cypress.diary.ui.summary.SummaryWordPoint
 import com.cypress.diary.ui.summary.monthLocalWeekDates
 import com.cypress.diary.ui.summary.monthlyWordCountsForYear
+import com.cypress.diary.ui.summary.newMonthSummaryDocument
+import com.cypress.diary.ui.summary.newWeekSummaryDocument
+import com.cypress.diary.ui.summary.newYearSummaryDocument
 import com.cypress.diary.ui.summary.nextSummaryDocument
 import com.cypress.diary.ui.summary.previousSummaryDocument
 import com.cypress.diary.ui.summary.weekDayWordCounts
@@ -61,7 +69,7 @@ fun SummaryScreen(
     onEditDocument: (DiaryDocument) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val statsModeName = rememberSaveable { mutableStateOf(DiarySummaryStatsMode.Year.name) }
+    val statsModeName = rememberSaveable { mutableStateOf(DiarySummaryStatsMode.Month.name) }
     val statsDateValue = rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val statsMode = DiarySummaryStatsMode.valueOf(statsModeName.value)
     val statsDate = LocalDate.parse(statsDateValue.value)
@@ -85,6 +93,7 @@ fun SummaryScreen(
             onModeChange = { statsModeName.value = it.name },
             selectedDate = statsDate,
             onDateChange = { statsDateValue.value = it.toString() },
+            onEditDocument = onEditDocument,
         )
     }
 
@@ -151,6 +160,7 @@ private fun DiarySummaryStatsPanel(
     onModeChange: (DiarySummaryStatsMode) -> Unit,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onEditDocument: (DiaryDocument) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -164,9 +174,9 @@ private fun DiarySummaryStatsPanel(
         ) {
             DiarySummaryStatsModeSelector(selectedMode, onModeChange)
             when (selectedMode) {
-                DiarySummaryStatsMode.Year -> DiaryYearStatsContent(tree, selectedDate, onDateChange, onModeChange)
-                DiarySummaryStatsMode.Month -> DiaryMonthStatsContent(tree, selectedDate, onDateChange, onModeChange)
-                DiarySummaryStatsMode.Week -> DiaryWeekStatsContent(tree, selectedDate, onDateChange)
+                DiarySummaryStatsMode.Year -> DiaryYearStatsContent(tree, selectedDate, onDateChange, onModeChange, onEditDocument)
+                DiarySummaryStatsMode.Month -> DiaryMonthStatsContent(tree, selectedDate, onDateChange, onModeChange, onEditDocument)
+                DiarySummaryStatsMode.Week -> DiaryWeekStatsContent(tree, selectedDate, onDateChange, onEditDocument)
             }
         }
     }
@@ -201,6 +211,7 @@ private fun DiaryYearStatsContent(
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     onModeChange: (DiarySummaryStatsMode) -> Unit,
+    onEditDocument: (DiaryDocument) -> Unit,
 ) {
     val year = selectedDate.year
     SummaryStatsPeriodHeader(
@@ -222,7 +233,12 @@ private fun DiaryYearStatsContent(
             onModeChange(DiarySummaryStatsMode.Month)
         },
     )
-    SummaryDocumentContentSection(document = findYearSummaryDocument(tree, year))
+    val document = findYearSummaryDocument(tree, year)
+    SummaryDocumentContentSection(
+        document = document,
+        editableDocument = document ?: newYearSummaryDocument(year),
+        onEditDocument = onEditDocument,
+    )
 }
 
 @Composable
@@ -231,6 +247,7 @@ private fun DiaryMonthStatsContent(
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     onModeChange: (DiarySummaryStatsMode) -> Unit,
+    onEditDocument: (DiaryDocument) -> Unit,
 ) {
     val month = YearMonth.from(selectedDate)
     SummaryStatsPeriodHeader(
@@ -248,7 +265,12 @@ private fun DiaryMonthStatsContent(
             onModeChange(DiarySummaryStatsMode.Week)
         },
     )
-    SummaryDocumentContentSection(document = findMonthSummaryDocument(tree, month.year, month.monthValue))
+    val document = findMonthSummaryDocument(tree, month.year, month.monthValue)
+    SummaryDocumentContentSection(
+        document = document,
+        editableDocument = document ?: newMonthSummaryDocument(month.year, month.monthValue),
+        onEditDocument = onEditDocument,
+    )
 }
 
 @Composable
@@ -256,12 +278,14 @@ private fun DiaryWeekStatsContent(
     tree: SummaryTree,
     selectedDate: LocalDate,
     onDateChange: (LocalDate) -> Unit,
+    onEditDocument: (DiaryDocument) -> Unit,
 ) {
     val key = WeekKey.from(selectedDate)
     val dates = monthLocalWeekDates(key.year, key.month, key.weekIndex)
     val document = findWeekSummaryDocument(tree, key)
     val dayCounts = document?.let(::weekDayWordCounts).orEmpty()
     val totalWordCount = document?.let(::weekWordCount) ?: 0
+    val contentScrollRequest = remember { mutableStateOf(0) }
     val title = if (dates.isEmpty()) {
         "${key.year}年${key.month}月第${key.weekIndex}周"
     } else {
@@ -283,7 +307,10 @@ private fun DiaryWeekStatsContent(
             dayCounts.map { day -> SummaryWordPoint(day.label, day.wordCount) }
         },
         onPointSelected = { index ->
-            dates.getOrNull(index)?.let(onDateChange)
+            dates.getOrNull(index)?.let { date ->
+                contentScrollRequest.value += 1
+                onDateChange(date)
+            }
         },
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -296,14 +323,45 @@ private fun DiaryWeekStatsContent(
             )
         } else {
             dayCounts.forEach { day ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(day.label)
-                    Text("${day.wordCount}字")
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            contentScrollRequest.value += 1
+                            onDateChange(day.date)
+                        },
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            day.label,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline,
+                        )
+                        Text(
+                            "${day.wordCount}字",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
     }
-    SummaryDocumentContentSection(document = document)
+    SummaryDocumentContentSection(
+        document = document,
+        editableDocument = document ?: newWeekSummaryDocument(key),
+        selectedDate = selectedDate,
+        scrollRequest = contentScrollRequest.value,
+        onEditDocument = onEditDocument,
+    )
 }
 
 @Composable
@@ -365,20 +423,21 @@ private fun SummaryWordLineChart(
     val lineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
     val axisColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
-    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+    val yLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+    val clickableLabelColor = MaterialTheme.colorScheme.primary
     val maxWordCount = points.maxOfOrNull { it.wordCount } ?: 0
     val midWordCount = maxWordCount / 2
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Column(
-                modifier = Modifier.height(150.dp).width(58.dp),
+                modifier = Modifier.height(150.dp).width(42.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.End,
+                horizontalAlignment = Alignment.Start,
             ) {
-                Text(formatCompactCount(maxWordCount), style = MaterialTheme.typography.bodySmall, color = labelColor)
-                Text(formatCompactCount(midWordCount), style = MaterialTheme.typography.bodySmall, color = labelColor)
-                Text("0", style = MaterialTheme.typography.bodySmall, color = labelColor)
+                Text(formatCompactCount(maxWordCount), style = MaterialTheme.typography.bodySmall, color = yLabelColor)
+                Text(formatCompactCount(midWordCount), style = MaterialTheme.typography.bodySmall, color = yLabelColor)
+                Text("0", style = MaterialTheme.typography.bodySmall, color = yLabelColor)
             }
             val plotModifier = if (horizontallyScrollable) {
                 Modifier
@@ -421,7 +480,9 @@ private fun SummaryWordLineChart(
                             point.label,
                             modifier = Modifier.clickable { onPointSelected(index) },
                             style = MaterialTheme.typography.bodySmall,
-                            color = labelColor,
+                            color = clickableLabelColor,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline,
                         )
                     }
                 }
@@ -431,30 +492,63 @@ private fun SummaryWordLineChart(
 }
 
 @Composable
-private fun SummaryDocumentContentSection(document: DiaryDocument?) {
+private fun SummaryDocumentContentSection(
+    document: DiaryDocument?,
+    editableDocument: DiaryDocument? = document,
+    selectedDate: LocalDate? = null,
+    scrollRequest: Int = 0,
+    onEditDocument: (DiaryDocument) -> Unit = {},
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("总结内容", fontWeight = FontWeight.SemiBold)
+        if (editableDocument != null) {
+            OutlinedButton(
+                onClick = { onEditDocument(editableDocument) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("编辑")
+            }
+        }
         if (document == null || document.body.isBlank() && document.type != DiaryDocumentType.Week) {
             Text(
                 "暂无总结内容",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
             )
-        } else if (document.type == DiaryDocumentType.Week) {
-            WeekSummaryDocumentView(document = document)
         } else {
-            MarkdownDocumentView(document = document, showTitle = false)
+            if (document.type == DiaryDocumentType.Week) {
+                WeekSummaryDocumentView(
+                    document = document,
+                    selectedDate = selectedDate,
+                    scrollRequest = scrollRequest,
+                )
+            } else {
+                MarkdownDocumentView(document = document, showTitle = false)
+            }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WeekSummaryDocumentView(
     document: DiaryDocument,
+    selectedDate: LocalDate? = null,
+    scrollRequest: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val days = remember(document.path, document.markdown) {
         weekSummaryDays(document)
+    }
+    val dayRequesters = remember(days) {
+        days.associate { day -> day.date to BringIntoViewRequester() }
+    }
+    LaunchedEffect(selectedDate, scrollRequest, dayRequesters) {
+        if (shouldScrollSummaryContent(scrollRequest)) {
+            selectedDate?.let { date ->
+                dayRequesters[date]?.bringIntoView()
+            }
+        }
     }
     Column(
         modifier = modifier,
@@ -467,7 +561,15 @@ private fun WeekSummaryDocumentView(
             )
         }
         days.forEach { day ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val requester = dayRequesters[day.date]
+            Column(
+                modifier = if (requester == null) {
+                    Modifier
+                } else {
+                    Modifier.bringIntoViewRequester(requester)
+                },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     text = "${day.date.monthValue}月${day.date.dayOfMonth}日",
                     style = MaterialTheme.typography.titleSmall,
@@ -534,4 +636,8 @@ private fun formatCompactCount(count: Int): String {
 private fun trimCount(value: Double): String {
     val rounded = String.format(java.util.Locale.US, "%.1f", value)
     return rounded.removeSuffix(".0")
+}
+
+internal fun shouldScrollSummaryContent(scrollRequest: Int): Boolean {
+    return scrollRequest > 0
 }

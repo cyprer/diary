@@ -134,6 +134,113 @@ class DiaryAppRefreshTest {
         assertEquals(null, selected)
     }
 
+    @Test
+    fun usesCachedWeeksWhenDocumentCacheIsUnavailable() {
+        val cachedWeek = diaryWeek(
+            key = WeekKey(2026, 5, 4),
+            date = LocalDate.of(2026, 5, 22),
+            content = "cached remote content",
+        )
+
+        val activeWeeks = resolveActiveWeeks(
+            remoteDocuments = null,
+            cachedDocuments = null,
+            cachedWeeks = listOf(cachedWeek),
+            codec = DiaryMarkdownCodec(),
+        )
+
+        assertEquals(listOf(cachedWeek), activeWeeks)
+    }
+
+    @Test
+    fun fillsMissingCachedDocumentWeeksFromWeekCache() {
+        val documentWeek = document(
+            path = "src/content/posts/summary/26year/5month/3week.md",
+            type = DiaryDocumentType.Week,
+            markdown = """
+                ---
+                title: "third"
+                published: 2026-05-15
+                tags: []
+                category: "week"
+                draft: false
+                ---
+
+                # third
+
+                ## 5.15
+                  document content
+            """.trimIndent(),
+        ).copy(weekIndex = 3)
+        val cachedFourthWeek = diaryWeek(
+            key = WeekKey(2026, 5, 4),
+            date = LocalDate.of(2026, 5, 22),
+            content = "cached fourth week",
+        )
+
+        val activeWeeks = resolveActiveWeeks(
+            remoteDocuments = null,
+            cachedDocuments = listOf(documentWeek),
+            cachedWeeks = listOf(cachedFourthWeek),
+            codec = DiaryMarkdownCodec(),
+        )
+
+        assertEquals(
+            listOf(WeekKey(2026, 5, 3), WeekKey(2026, 5, 4)),
+            activeWeeks.map { it.key },
+        )
+        assertEquals(
+            "cached fourth week",
+            activeWeeks.first { it.key == WeekKey(2026, 5, 4) }.days.first().content,
+        )
+    }
+
+    @Test
+    fun returnsEmptyWeeksWhenNoRealDiaryDataExists() {
+        val activeWeeks = resolveActiveWeeks(
+            remoteDocuments = null,
+            cachedDocuments = null,
+            cachedWeeks = null,
+            codec = DiaryMarkdownCodec(),
+        )
+
+        assertEquals(emptyList<DiaryWeek>(), activeWeeks)
+    }
+
+    @Test
+    fun returnsEmptyDocumentsWhenNoRealDiaryDataExists() {
+        assertEquals(
+            emptyList<DiaryDocument>(),
+            resolveActiveDocuments(
+                remoteDocuments = null,
+                cachedDocuments = null,
+                cachedWeeks = null,
+                codec = DiaryMarkdownCodec(),
+            ),
+        )
+    }
+
+    @Test
+    fun fillsMissingCachedDocumentsFromWeekCache() {
+        val cachedWeek = diaryWeek(
+            key = WeekKey(2026, 5, 4),
+            date = LocalDate.of(2026, 5, 22),
+            content = "cached fourth week",
+        )
+
+        val activeDocuments = resolveActiveDocuments(
+            remoteDocuments = null,
+            cachedDocuments = emptyList(),
+            cachedWeeks = listOf(cachedWeek),
+            codec = DiaryMarkdownCodec(),
+        )
+
+        assertEquals(1, activeDocuments.size)
+        assertEquals("src/content/posts/summary/26year/5month/4week.md", activeDocuments.first().path)
+        assertEquals(DiaryDocumentType.Week, activeDocuments.first().type)
+        assertTrue(activeDocuments.first().markdown.contains("cached fourth week"))
+    }
+
     private fun document(
         path: String,
         type: DiaryDocumentType,

@@ -28,6 +28,20 @@ class EditorDraftStoreTest {
         assertEquals(mapOf("two" to "beta"), store.loadAll())
     }
 
+    @Test
+    fun clearsAllIndexedDrafts() {
+        val prefs = InMemoryPreferenceStore()
+        val store = EditorDraftStore(prefs)
+
+        store.save("one", "alpha")
+        store.save("two", "beta")
+        store.clearAll()
+
+        assertEquals(emptyMap<String, String>(), store.loadAll())
+        assertEquals(null, store.load("one"))
+        assertEquals(null, store.load("two"))
+    }
+
     private class InMemoryPreferenceStore : PreferenceStore {
         private val values = mutableMapOf<String, String?>()
 

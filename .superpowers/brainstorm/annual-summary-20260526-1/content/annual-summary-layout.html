@@ -1,0 +1,62 @@
+<h2>记账统计页：年度总结布局选择</h2>
+<p class="subtitle">你已选“月度 / 年度”切换。这里是同一方向下的 3 种布局细化，推荐 A1。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a1" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">统计</div>
+        <div class="mockup-body">
+          <div class="mock-nav">月度 | 年度</div>
+          <h3>2026 年</h3>
+          <div class="placeholder">全年收入 / 支出 / 结余</div>
+          <div class="placeholder">12 个月收支条形概览</div>
+          <div class="placeholder">年度支出分类排行</div>
+          <div class="placeholder">年度收入分类排行</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A1：同页切换 + 年度完整视图</h3>
+      <p>统计页顶部加“月度 / 年度”，年度视图有年份切换、全年概览、月度趋势和分类排行。信息最完整，也符合现有统计页职责。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="a2" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">统计</div>
+        <div class="mockup-body">
+          <div class="mock-nav">月度 | 年度</div>
+          <h3>2026 年</h3>
+          <div class="placeholder">全年收入 / 支出 / 结余</div>
+          <div class="placeholder">月度净结余列表</div>
+          <div class="placeholder">只显示支出分类 Top 5</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A2：轻量年度摘要</h3>
+      <p>只做年度总额、每月结余和支出 Top 5。实现更快，但年度总结的“复盘感”弱一些。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="a3" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">统计</div>
+        <div class="mockup-body">
+          <div class="mock-nav">月度 | 年度</div>
+          <h3>2026 年</h3>
+          <div class="placeholder">全年概览</div>
+          <div class="placeholder">按月份展开，每月都有分类明细</div>
+          <div class="placeholder">年度分类排行</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A3：年度明细型</h3>
+      <p>年度页里展开每个月的细节。适合查账，但页面会很长，和账本页职责有些重叠。</p>
+    </div>
+  </div>
+</div>

@@ -9,9 +9,9 @@
 核心原则：
 
 - 普通用户默认本地使用，不需要 GitHub，也不应该看到推送、仓库、Token 等概念。
-- GitHub 是隐藏的个人同步能力，可通过“我的”页头像 7 次快速点击，或在日记页搜索框输入 `github` 后点击搜索按钮打开配置弹窗。
+- GitHub 是隐藏的个人同步能力，可通过“我的”页头像 5 次快速点击、底部“我的”导航 5 次快速点击，或在日记页搜索框输入 `github` 后点击搜索按钮打开配置弹窗。快速点击窗口是 1 秒。
 - GitHub 连接后，本地保存和远程推送是两个动作：保存只写本地，推送才写 GitHub。
-- 总结页面展示年结、月结、周结；顶部统计面板按 `年结 / 月结 / 周结` 展示字数统计。年结折线按 12 个月统计周记字数，月结折线按 4 个周记统计字数，周结展示本周总字数和每天字数。
+- 总结页面展示年结、月结、周结，默认打开月结；顶部统计面板按 `年结 / 月结 / 周结` 展示字数统计。年结折线按 12 个月统计周记字数，月结折线按 4 个周记统计字数，周结展示本周总字数和每天字数。
 - 不要把 Markdown 原文暴露给普通用户。编辑总结时编辑的是正文输入框，不是整份 Markdown。
 - 应用现在包含日记和记账两个模块。模块切换入口在“我的”页；记账数据必须保持本地独立，不接入日记 Markdown、GitHub 同步或 `.diary` 导入导出。
 
@@ -81,6 +81,22 @@ src/content/posts/summary/26year/5month/3week.md
 
 不要只用 front matter 的 `published` 推导周号。旧数据或外部仓库文件可能把 `published` 写成月初日期。
 
+## Markdown 格式约定
+
+日记和总结 Markdown 解析要兼容旧文件，但新写出的文件遵循当前格式：
+
+- front matter 不再写 `description`。解析旧文件时如果存在 `description` 可以读；如果缺失，使用 `title` 兜底。
+- 周记/周结由 `DiaryMarkdownCodec.render()` 写出。不要用字符串拼接绕过 codec。
+- 每天内容格式是标题下一行直接缩进两个空格：
+
+```markdown
+## 5.26
+  今天的内容
+```
+
+- 读取每天内容时要去掉行首缩进，让编辑框里只出现用户正文。
+- 修改 Markdown 格式前必须补 `DiaryMarkdownCodecTest`，因为这会同时影响 GitHub、导入导出、本地缓存和总结展示。
+
 ## 日记数据流
 
 普通用户本地保存：
@@ -95,8 +111,9 @@ GitHub 用户：
 
 1. 隐藏设置中输入 owner/repo/branch/token。
 2. 下拉刷新才从 GitHub 拉取，不在启动时自动拉取。
-3. 编辑页面有 `取消 / 保存 / 推送`。
+3. 编辑页面有 `取消 / 本地保存 / 推送到 GitHub`。
 4. 保存只写本地，推送会先保存本地，再调用 `GitHubDiaryRepository.saveWeek()`。
+5. 下拉刷新拿到的远程数据必须保存进本地缓存；用户下次打开应用时不应该依赖再次拉取才能看到上次刷新过的内容。
 
 注意：普通用户界面不要出现推送按钮。
 
@@ -193,23 +210,27 @@ GitHub 用户：
 
 行为：
 
-- 总结页主界面按 `年结 / 月结 / 周结` 三个切换展示统计内容，不再在下方显示可展开的年/月/周树；每个切换下方要直接展示对应总结内容。年结折线的月份标签可点击并在总结页内切到对应月结，月结折线的周次标签可点击并在总结页内切到对应周结，周结折线按每天字数展示并可点击日期在当前周结页切换。
+- 总结页主界面按 `年结 / 月结 / 周结` 三个切换展示统计内容，默认选中月结，不再在下方显示可展开的年/月/周树；每个切换下方要直接展示对应总结内容。年结折线的月份标签可点击并在总结页内切到对应月结，月结折线的周次标签可点击并在总结页内切到对应周结，周结折线按每天字数展示并可点击日期在当前周结页切换。
+- 折线图左侧 Y 轴数字要固定在左侧，横向滚动时只滚动图形和 X 轴内容。Y 轴可以留很小间距，但不要留下明显空白。
+- 折线图 X 轴标签是可点击入口，必须有可感知的点击样式，例如主题主色、加粗、下划线。
 - 年结和月结展示普通 Markdown 正文。
 - 周结按月内 4 周划分：1-7 号、8-14 号、15-21 号、22 号到月末。周结展示两部分：
   - 周结正文，也就是 Markdown 标题后的正文。
   - 本周每天日记，来自同一周 Markdown 里的 `## 月.日` 小节。
+  - 本周字数列表，每天一行，也要能点击并跳到当前周结页对应日期内容；样式要让用户知道可点击。
 
 周结每天日记不能直接展示 Markdown 文件里的所有日记小节。必须通过 `weekSummaryDays(document)` 按 `DiaryDocument.path` 的 year/month/weekIndex 筛选这一周日期。
 
 编辑总结：
 
-- 点周结弹窗的编辑，会进入编辑页。
+- 每个年结、月结、周结内容区都要有编辑入口。即使当前没有对应总结文档，也要用 `SummaryDocumentFactory` 创建空文档后进入编辑。
 - 周结编辑页包含总结正文输入框和本周每天输入框。
 - 月结、年结只编辑正文。
-- 不要展示 front matter、`#`、`##` 等 Markdown 结构给用户。
+- 编辑页不要展示仓库路径、front matter、`#`、`##` 等 Markdown 结构给用户。
 
 相关文件：
 
+- [SummaryDocumentFactory.kt](../app/src/main/java/com/cypress/diary/ui/summary/SummaryDocumentFactory.kt)
 - [SummaryDocumentBody.kt](../app/src/main/java/com/cypress/diary/ui/editor/SummaryDocumentBody.kt)
 - [DraftContentResolver.kt](../app/src/main/java/com/cypress/diary/ui/editor/DraftContentResolver.kt)
 - [DiaryDocumentCodec.kt](../app/src/main/java/com/cypress/diary/parser/DiaryDocumentCodec.kt)
@@ -230,10 +251,10 @@ GitHub 用户：
 
 - 不要写死 owner、repo、token。
 - 默认配置必须为空。
-- 隐藏入口是“我的”页头像 7 次快速点击，或日记页搜索 `github` 后点击搜索按钮。
-- 底部导航的“我的”只做普通导航，不触发弹窗。
+- 隐藏入口是“我的”页头像 5 次快速点击、底部导航“我的”5 次快速点击，或日记页搜索 `github` 后点击搜索按钮。5 次点击必须在 1 秒窗口内连续发生。
+- 底部导航的“我的”普通单次点击只做导航，不应该因为已有 GitHub 连接或旧 reveal signal 反复弹窗。`githubSettingsRevealSignal` 触发后必须消费/清零。
 - 连接 GitHub 后，个人页左上角显示退出连接按钮。
-- 退出连接只清除 GitHub 配置和 token，不删除本地日记。
+- 退出连接用于测试和重新连接：清除 GitHub 配置、token、日记文档缓存、周缓存和编辑草稿。
 - 下拉刷新才拉取 GitHub 数据。
 
 普通用户相关要求：
@@ -295,7 +316,11 @@ GitHub 用户：
 - 本地保存后要立刻更新内存状态和缓存，否则返回日记页不会立即显示。
 - 草稿优先于远程或缓存内容。
 - 推送成功后清除对应草稿。
-- 退出 GitHub 不清除本地缓存。
+- 不保留示例数据兜底。普通用户和新安装用户如果没有本地数据，就应该看到真实空状态。
+- `SharedPreferencesPreferenceStore` 对关键缓存写入使用同步提交，避免刷新后立刻关闭应用导致缓存没落盘。
+- `resolveActiveDocuments()` 要把只有 `DiaryWeekCacheStore` 里的周数据转换成 `DiaryDocument`，否则日记页能看到内容但总结页看不到。
+- `resolveActiveWeeks()` 以文档解析出的周为主，并用 `DiaryWeekCacheStore` 补齐缺失周，避免旧缓存或格式差异导致部分日期丢失。
+- 退出 GitHub 会清除 GitHub 配置、文档缓存、周缓存和草稿，方便重新连接测试；不要把这条行为误改成只清 token。
 
 ## UI 约定
 
@@ -314,9 +339,10 @@ GitHub 用户：
 - 普通用户路径优先，不要为了 GitHub 用户污染默认界面。
 - 编辑日记时普通用户只能一天一天编辑。
 - 编辑周结时才允许同时编辑一周每天日记。
+- 编辑页不展示文件路径。路径是内部调试和同步概念，不应出现在普通编辑体验里。
 - 弹窗标题不要重复。
 - 总结弹窗支持上一个/下一个。
-- 统计折线图横向滑动时要固定左侧 Y 轴数字，不能让字数或支出数随图一起滑走；X 轴标签要可点击，用于在当前模块内跳转到对应时间。
+- 统计折线图横向滑动时要固定左侧 Y 轴数字，不能让字数或支出数随图一起滑走；X 轴标签要可点击，用于在当前模块内跳转到对应时间，并且要用明显的可点击样式。
 - 日记页搜索框和年月周切换控件都铺满一行；搜索框调整的是上下长度/高度占比，不要缩窄年月周切换控件；搜索图标在右侧。
 - 我的页标题顶部居中；GitHub 用户左上角有退出连接按钮。
 - 模块切换放在“我的”页，不要在普通日记页面增加额外切换入口。
@@ -331,6 +357,7 @@ GitHub 用户：
 - Markdown 解析和渲染：`parser/`
 - 周和日期选择：`ui/calendar/`、`ui/state/`
 - 编辑和草稿合并：`ui/editor/`、`storage/`
+- 总结文档新建和周结筛选：`ui/summary/`
 - GitHub 路径和 payload：`github/`
 - 导入导出：`export/`
 - DiaryApp 级别纯函数：`DiaryAppRefreshTest.kt`
@@ -360,6 +387,7 @@ GitHub 用户：
 - 新增日记字段：先改模型和 codec，再改导入导出和编辑 UI。
 - 新增同步方式：不要耦合到 GitHub 逻辑，优先抽象成独立 repository。
 - 新增统计页：优先从 `DiaryDocument` 或 `DiaryWeek` 派生，不要直接读 UI 状态。
+- 新增总结能力：先确认对应年/月/周文档路径和空文档创建逻辑，再改展示和编辑入口。
 - 新增主题能力：扩展 `AppAppearanceStore` 并补测试。
 - 新增记账能力：优先扩展 `accounting/` 纯逻辑和 `AccountingRecordStore`，不要耦合到日记 Markdown、GitHub 或 `.diary`。
 
@@ -389,7 +417,9 @@ git diff --cached --stat
 - `DiaryDocumentCodec.parse()`：会影响总结树、导入导出和缓存恢复。
 - `GitHubConfigStore`：不要引入默认私人仓库或 token。
 - `ProfileScreen`：不要让普通用户看见 GitHub 能力。
+- `githubSettingsRevealSignal`：这是一次性事件，触发后必须消费，避免正常点击“我的”重复弹 GitHub 配置。
 - `DiaryDocumentCacheStore`：旧缓存兼容很重要。
+- `DiaryWeekCacheStore`：要和文档缓存互相补齐，不能让日记页和总结页看到的数据不一致。
 - `DiaryRoute` companion 根路由：必须使用 getter，避免嵌套 `data object` 初始化顺序导致 null。
 - `isBottomRouteSelected()`：影响底部导航选中状态和编辑页归属。
 - `AccountingRecordStore`：记账数据格式需要兼容旧记录，损坏单行应跳过而不是让应用崩溃。

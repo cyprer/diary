@@ -63,7 +63,6 @@ import com.cypress.diary.storage.SharedPreferencesPreferenceStore
 import com.cypress.diary.ui.components.AppBackground
 import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
-import com.cypress.diary.ui.sample.sampleDiaryWeeks
 import com.cypress.diary.ui.screens.DiaryScreen
 import com.cypress.diary.ui.screens.EditorScreen
 import com.cypress.diary.ui.screens.EditMode
@@ -125,7 +124,6 @@ fun DiaryApp() {
     }
     val repository = remember { GitHubDiaryRepository() }
     val quoteRepository = remember { DailyQuoteRepository() }
-    val sampleWeeks = remember { sampleDiaryWeeks() }
     val editorBuilder = remember { DiaryEditContentBuilder() }
     val draftContentResolver = remember { DraftContentResolver() }
     val documentCodec = remember { DiaryDocumentCodec() }
@@ -185,16 +183,15 @@ fun DiaryApp() {
     val accountingStatsMode = AccountingStatsMode.valueOf(accountingStatsModeName)
     val accountingCategories = defaultAccountingCategories + customAccountingCategories
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
-    val sampleDocuments = remember(sampleWeeks) {
-        sampleWeeks.mapNotNull { week ->
-            val path = weekPathResolver.resolve(week.key)
-            runCatching { documentCodec.parse(path, editorBuilder.render(week)) }.getOrNull()
-        }
-    }
-    val activeDocuments = remoteDocuments ?: cachedDocuments ?: sampleDocuments
-    val exportSourceDocuments = remoteDocuments ?: cachedDocuments ?: emptyList()
-    val activeWeeks = remember(activeDocuments, cachedWeeks, sampleWeeks) {
-        documentsToWeeks(activeDocuments, weekCodec).ifEmpty { cachedWeeks ?: sampleWeeks }
+    val activeDocuments = resolveActiveDocuments(remoteDocuments, cachedDocuments, cachedWeeks, weekCodec)
+    val exportSourceDocuments = activeDocuments
+    val activeWeeks = remember(remoteDocuments, cachedDocuments, cachedWeeks) {
+        resolveActiveWeeks(
+            remoteDocuments = remoteDocuments,
+            cachedDocuments = cachedDocuments,
+            cachedWeeks = cachedWeeks,
+            codec = weekCodec,
+        )
     }
     val selectedWeek = remember(activeWeeks, selectedDateValue) { activeWeeks.findByDate(selectedDate) }
     val palette = resolvePalette(appearance.paletteName)
@@ -313,7 +310,7 @@ fun DiaryApp() {
             1
         }
         profileHiddenLastTapAt = now
-        if (profileHiddenTapCount >= 7) {
+        if (profileHiddenTapCount >= 5) {
             profileHiddenTapCount = 0
             githubSettingsRevealSignal += 1
         }
@@ -567,7 +564,12 @@ fun DiaryApp() {
                         DiaryRoute.rootRoutesFor(activeModule).forEach { rootRoute ->
                             NavigationBarItem(
                                 selected = isBottomRouteSelected(rootRoute, route),
-                                onClick = { route = rootRoute.route },
+                                onClick = {
+                                    route = rootRoute.route
+                                    if (rootRoute == DiaryRoute.Profile) {
+                                        revealGitHubSettingsFromProfileTab()
+                                    }
+                                },
                                 icon = {
                                     Icon(
                                         imageVector = rootRoute.icon,
@@ -664,6 +666,9 @@ fun DiaryApp() {
                         githubConfig = githubConfig,
                         connectionStatus = connectionStatus,
                         githubSettingsRevealSignal = githubSettingsRevealSignal,
+                        onGitHubSettingsRevealHandled = {
+                            githubSettingsRevealSignal = 0
+                        },
                         backgroundUri = appearance.backgroundUri,
                         layoutOpacity = appearance.layoutOpacity,
                         refreshing = refreshing,
@@ -677,8 +682,18 @@ fun DiaryApp() {
                             configStore.clear()
                             githubConfig = null
                             remoteDocuments = null
+                            cachedDocuments = null
+                            cachedWeeks = null
+                            selectedSummaryFallbackDocument = null
+                            editorDocumentFallback = null
+                            selectedSummaryPath = null
+                            editorDocumentPath = null
+                            draftSnapshots = emptyMap()
+                            documentCacheStore.clear()
+                            weekCacheStore.clear()
+                            draftStore.clearAll()
                             connectionStatus = "未连接"
-                            Toast.makeText(context, "已退出 GitHub 连接", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "已退出 GitHub 连接并清空本地数据", Toast.LENGTH_SHORT).show()
                         },
                         onExportDiary = ::exportDiary,
                         onImportDiary = ::importDiary,
@@ -746,7 +761,6 @@ fun DiaryApp() {
                     )
 
                     DiaryRoute.Editor.route -> EditorScreen(
-                        date = selectedDate,
                         mode = editorMode,
                         draft = editorDraft,
                         refreshing = refreshing,
@@ -812,8 +826,6 @@ fun DiaryApp() {
                         },
                         modifier = Modifier.padding(innerPadding),
                         title = if (editorDocumentPath != null) "编辑总结" else "编辑日记",
-                        pathText = editorDocumentPath?.let { "路径：$it" }
-                            ?: "路径：${selectedDate.year} / ${selectedDate.monthValue} / ${selectedDate.dayOfMonth}",
                         showModeSelector = false,
                         showPushButton = githubConfig != null,
                         contentLabel = if (editorDocumentPath != null) "总结内容" else if (editorMode == EditMode.Day) "当天内容" else "整周 Markdown",
@@ -846,6 +858,40 @@ fun DiaryApp() {
     }
 }
 
+internal fun resolveActiveWeeks(
+    remoteDocuments: List<DiaryDocument>?,
+    cachedDocuments: List<DiaryDocument>?,
+    cachedWeeks: List<DiaryWeek>?,
+    codec: DiaryMarkdownCodec,
+): List<DiaryWeek> {
+    if (remoteDocuments != null) {
+        return documentsToWeeks(remoteDocuments, codec).ifEmpty { cachedWeeks.orEmpty() }
+    }
+    val documentWeeks = cachedDocuments?.let { documentsToWeeks(it, codec) }.orEmpty()
+    return mergeCachedWeeks(
+        documentWeeks = documentWeeks,
+        cachedWeeks = cachedWeeks.orEmpty(),
+    )
+}
+
+internal fun resolveActiveDocuments(
+    remoteDocuments: List<DiaryDocument>?,
+    cachedDocuments: List<DiaryDocument>?,
+    cachedWeeks: List<DiaryWeek>?,
+    codec: DiaryMarkdownCodec,
+): List<DiaryDocument> {
+    if (remoteDocuments != null) return remoteDocuments
+
+    val documents = cachedDocuments.orEmpty()
+    val weekDocuments = cachedWeeks.orEmpty().map { week ->
+        week.toDocument(codec)
+    }
+    return (weekDocuments + documents)
+        .associateBy { it.path }
+        .values
+        .sortedWith(compareBy({ it.year }, { it.month ?: 0 }, { it.type.ordinal }, { it.weekIndex ?: 0 }))
+}
+
 private fun documentsToWeeks(
     documents: List<DiaryDocument>,
     codec: DiaryMarkdownCodec,
@@ -865,6 +911,32 @@ private fun documentsToWeeks(
                 }
         }
         .sortedWith(compareBy({ it.key.year }, { it.key.month }, { it.key.weekIndex }))
+}
+
+private fun mergeCachedWeeks(
+    documentWeeks: List<DiaryWeek>,
+    cachedWeeks: List<DiaryWeek>,
+): List<DiaryWeek> {
+    return (cachedWeeks + documentWeeks)
+        .associateBy { it.key }
+        .values
+        .sortedWith(compareBy({ it.key.year }, { it.key.month }, { it.key.weekIndex }))
+}
+
+private fun DiaryWeek.toDocument(codec: DiaryMarkdownCodec): DiaryDocument {
+    val path = WeekPathResolver().resolve(key)
+    val markdown = codec.render(this)
+    return DiaryDocument(
+        path = path,
+        type = DiaryDocumentType.Week,
+        year = key.year,
+        month = key.month,
+        weekIndex = key.weekIndex,
+        title = title,
+        published = published,
+        markdown = markdown,
+        body = intro,
+    )
 }
 
 private fun resolvePalette(name: String): ThemePalette {

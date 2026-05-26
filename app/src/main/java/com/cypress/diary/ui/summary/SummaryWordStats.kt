@@ -1,6 +1,7 @@
 package com.cypress.diary.ui.summary
 
 import com.cypress.diary.model.DiaryDocument
+import java.time.LocalDate
 
 data class SummaryWordPoint(
     val label: String,
@@ -8,6 +9,7 @@ data class SummaryWordPoint(
 )
 
 data class SummaryDayWordCount(
+    val date: LocalDate,
     val label: String,
     val content: String,
     val wordCount: Int,
@@ -59,6 +61,7 @@ fun monthlyWordCountsForYear(
 fun weekDayWordCounts(document: DiaryDocument): List<SummaryDayWordCount> {
     return weekSummaryDays(document).map { day ->
         SummaryDayWordCount(
+            date = day.date,
             label = "${day.date.monthValue}/${day.date.dayOfMonth}",
             content = day.content,
             wordCount = countSummaryWords(day.content),

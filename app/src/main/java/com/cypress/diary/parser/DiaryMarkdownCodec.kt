@@ -43,7 +43,7 @@ class DiaryMarkdownCodec {
         fun finishDay() {
             val month = currentDayMonth ?: return
             val dayOfMonth = currentDayOfMonth ?: return
-            val content = trimBlankLines(currentContent)
+            val content = trimDayContent(currentContent)
             days += DiaryDay(
                 date = LocalDate.of(weekKey.year, month, dayOfMonth),
                 content = content,
@@ -98,7 +98,6 @@ class DiaryMarkdownCodec {
         appendLine("---")
         appendLine("title: ${quote(week.title)}")
         appendLine("published: ${week.published}")
-        appendLine("description: ${quote(week.description)}")
         appendLine("tags: ${week.tags.joinToString(prefix = "[", postfix = "]") { quote(it) }}")
         appendLine("category: ${quote(week.category)}")
         appendLine("draft: ${week.draft}")
@@ -132,8 +131,8 @@ class DiaryMarkdownCodec {
     private fun renderDay(day: DiaryDay): String = buildString {
         append("## ${day.date.monthValue}.${day.date.dayOfMonth}")
         if (day.content.isNotBlank()) {
-            append("\n\n")
-            append(day.content.trimEnd())
+            append("\n")
+            append(renderDayContent(day.content))
         }
     }
 
@@ -165,7 +164,7 @@ class DiaryMarkdownCodec {
         return FrontMatter(
             title = requireNotNull(title) { "title is missing" },
             published = requireNotNull(published) { "published is missing" },
-            description = requireNotNull(description) { "description is missing" },
+            description = description ?: requireNotNull(title) { "title is missing" },
             tags = requireNotNull(tags) { "tags is missing" },
             category = requireNotNull(category) { "category is missing" },
             draft = requireNotNull(draft) { "draft is missing" },
@@ -241,6 +240,28 @@ class DiaryMarkdownCodec {
         }
         if (start > end) return ""
         return lines.subList(start, end + 1).joinToString("\n")
+    }
+
+    private fun trimDayContent(lines: List<String>): String {
+        var start = 0
+        var end = lines.size - 1
+        while (start <= end && lines[start].isBlank()) {
+            start++
+        }
+        while (end >= start && lines[end].isBlank()) {
+            end--
+        }
+        if (start > end) return ""
+        return lines.subList(start, end + 1)
+            .joinToString("\n") { it.trimStart() }
+    }
+
+    private fun renderDayContent(content: String): String {
+        return content.trim()
+            .lines()
+            .joinToString("\n") { line ->
+                if (line.isBlank()) "" else "  ${line.trimStart()}"
+            }
     }
 
     private fun findClosingFence(lines: List<String>, startIndex: Int): Int {

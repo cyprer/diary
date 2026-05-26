@@ -32,7 +32,6 @@ enum class EditMode(val label: String) {
 
 @Composable
 fun EditorScreen(
-    date: LocalDate,
     mode: EditMode,
     draft: String,
     refreshing: Boolean,
@@ -44,7 +43,7 @@ fun EditorScreen(
     onPush: () -> Unit,
     modifier: Modifier = Modifier,
     title: String = "编辑日记",
-    pathText: String = "路径：${date.year} / ${date.monthValue} / ${date.dayOfMonth}",
+    pathText: String? = null,
     showModeSelector: Boolean = true,
     showPushButton: Boolean = false,
     contentLabel: String = if (mode == EditMode.Day) "当天内容" else "整周 Markdown",
@@ -84,11 +83,13 @@ fun EditorScreen(
             }
         }
 
-        Text(
-            text = pathText,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
-        )
+        pathText?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+            )
+        }
 
         OutlinedTextField(
             value = draft,
@@ -121,29 +122,31 @@ fun EditorScreen(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            OutlinedButton(
-                onClick = onBack,
-                modifier = Modifier.weight(1f),
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("取消")
-            }
-            Button(
-                onClick = onSave,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = null)
-                Text("保存")
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("取消")
+                }
+                Button(
+                    onClick = onSave,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = null)
+                    Text(if (showPushButton) "本地保存" else "保存")
+                }
             }
             if (showPushButton) {
                 Button(
                     onClick = onPush,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("推送")
+                    Text("推送到 GitHub")
                 }
             }
         }
