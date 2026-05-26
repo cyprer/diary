@@ -10,6 +10,13 @@ data class AccountingMonthSummary(
     val balanceCents: Long,
 )
 
+data class AccountingMonthTotal(
+    val month: YearMonth,
+    val incomeCents: Long,
+    val expenseCents: Long,
+    val balanceCents: Long,
+)
+
 data class AccountingCategoryTotal(
     val category: String,
     val amountCents: Long,
@@ -30,6 +37,34 @@ fun monthlySummary(records: List<AccountingRecord>, month: YearMonth): Accountin
     )
 }
 
+fun recordsForYear(records: List<AccountingRecord>, year: Int): List<AccountingRecord> {
+    return records.filter { it.date.year == year }
+}
+
+fun yearlySummary(records: List<AccountingRecord>, year: Int): AccountingMonthSummary {
+    val yearlyRecords = recordsForYear(records, year)
+    val income = yearlyRecords.filter { it.type == AccountingRecordType.Income }.sumOf { it.amountCents }
+    val expense = yearlyRecords.filter { it.type == AccountingRecordType.Expense }.sumOf { it.amountCents }
+    return AccountingMonthSummary(
+        incomeCents = income,
+        expenseCents = expense,
+        balanceCents = income - expense,
+    )
+}
+
+fun monthlyTotalsForYear(records: List<AccountingRecord>, year: Int): List<AccountingMonthTotal> {
+    return (1..12).map { monthValue ->
+        val month = YearMonth.of(year, monthValue)
+        val summary = monthlySummary(records, month)
+        AccountingMonthTotal(
+            month = month,
+            incomeCents = summary.incomeCents,
+            expenseCents = summary.expenseCents,
+            balanceCents = summary.balanceCents,
+        )
+    }
+}
+
 fun categoryTotals(
     records: List<AccountingRecord>,
     type: AccountingRecordType,
@@ -48,4 +83,16 @@ fun categoryTotals(
 
 fun sortRecordsForLedger(records: List<AccountingRecord>): List<AccountingRecord> {
     return records.sortedWith(compareByDescending<AccountingRecord> { it.date }.thenByDescending { it.createdAt })
+}
+
+fun replaceAccountingRecords(imported: List<AccountingRecord>): List<AccountingRecord> {
+    return sortRecordsForLedger(imported)
+}
+
+fun mergeAccountingRecords(
+    local: List<AccountingRecord>,
+    imported: List<AccountingRecord>,
+): List<AccountingRecord> {
+    val importedIds = imported.map { it.id }.toSet()
+    return sortRecordsForLedger(local.filterNot { it.id in importedIds } + imported)
 }

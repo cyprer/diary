@@ -34,6 +34,55 @@ class AccountingSummaryTest {
     }
 
     @Test
+    fun filtersRecordsByYear() {
+        val records = listOf(
+            record("a", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 1, 1)),
+            record("b", AccountingRecordType.Income, 200, "salary", LocalDate.of(2025, 12, 31)),
+            record("c", AccountingRecordType.Income, 300, "salary", LocalDate.of(2026, 12, 31)),
+        )
+
+        assertEquals(listOf("a", "c"), recordsForYear(records, 2026).map { it.id })
+    }
+
+    @Test
+    fun calculatesYearlyTotals() {
+        val records = listOf(
+            record("a", AccountingRecordType.Expense, 1000, "food", LocalDate.of(2026, 1, 1)),
+            record("b", AccountingRecordType.Expense, 500, "transport", LocalDate.of(2026, 12, 2)),
+            record("c", AccountingRecordType.Income, 3000, "salary", LocalDate.of(2026, 5, 3)),
+            record("d", AccountingRecordType.Income, 7000, "salary", LocalDate.of(2025, 5, 3)),
+        )
+
+        val summary = yearlySummary(records, 2026)
+
+        assertEquals(3000L, summary.incomeCents)
+        assertEquals(1500L, summary.expenseCents)
+        assertEquals(1500L, summary.balanceCents)
+    }
+
+    @Test
+    fun returnsTwelveMonthlyTotalsForYear() {
+        val records = listOf(
+            record("janExpense", AccountingRecordType.Expense, 1000, "food", LocalDate.of(2026, 1, 8)),
+            record("janIncome", AccountingRecordType.Income, 3000, "salary", LocalDate.of(2026, 1, 9)),
+            record("decExpense", AccountingRecordType.Expense, 2000, "rent", LocalDate.of(2026, 12, 10)),
+        )
+
+        val totals = monthlyTotalsForYear(records, 2026)
+
+        assertEquals((1..12).toList(), totals.map { it.month.monthValue })
+        assertEquals(3000L, totals[0].incomeCents)
+        assertEquals(1000L, totals[0].expenseCents)
+        assertEquals(2000L, totals[0].balanceCents)
+        assertEquals(0L, totals[1].incomeCents)
+        assertEquals(0L, totals[1].expenseCents)
+        assertEquals(0L, totals[1].balanceCents)
+        assertEquals(0L, totals[11].incomeCents)
+        assertEquals(2000L, totals[11].expenseCents)
+        assertEquals(-2000L, totals[11].balanceCents)
+    }
+
+    @Test
     fun groupsCategoryTotalsByTypeAndDescendingAmount() {
         val records = listOf(
             record("a", AccountingRecordType.Expense, 1000, "餐饮", LocalDate.of(2026, 5, 1)),
@@ -54,6 +103,38 @@ class AccountingSummaryTest {
         val latestDate = record("latestDate", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 3), createdAt = 1)
 
         assertEquals(listOf("latestDate", "newer", "older"), sortRecordsForLedger(listOf(older, latestDate, newer)).map { it.id })
+    }
+
+    @Test
+    fun replacesAccountingRecordsWithImportedRecords() {
+        val imported = listOf(
+            record("imported", AccountingRecordType.Income, 100, "salary", LocalDate.of(2026, 5, 3)),
+            record("older", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 2)),
+        )
+
+        assertEquals(
+            listOf("imported", "older"),
+            replaceAccountingRecords(imported).map { it.id },
+        )
+    }
+
+    @Test
+    fun mergesAccountingRecordsByIdUsingImportedRecordOnConflict() {
+        val local = listOf(
+            record("localOnly", AccountingRecordType.Expense, 100, "food", LocalDate.of(2026, 5, 1)),
+            record("same", AccountingRecordType.Expense, 100, "old", LocalDate.of(2026, 5, 2)),
+        )
+        val imported = listOf(
+            record("same", AccountingRecordType.Income, 900, "new", LocalDate.of(2026, 5, 3)),
+            record("importedOnly", AccountingRecordType.Income, 500, "salary", LocalDate.of(2026, 5, 4)),
+        )
+
+        val merged = mergeAccountingRecords(local, imported)
+
+        assertEquals(listOf("importedOnly", "same", "localOnly"), merged.map { it.id })
+        assertEquals(AccountingRecordType.Income, merged.first { it.id == "same" }.type)
+        assertEquals(900L, merged.first { it.id == "same" }.amountCents)
+        assertEquals("new", merged.first { it.id == "same" }.category)
     }
 
     private fun record(

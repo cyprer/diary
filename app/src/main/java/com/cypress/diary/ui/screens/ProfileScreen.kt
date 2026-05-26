@@ -73,6 +73,8 @@ fun ProfileScreen(
     onGitHubDisconnect: () -> Unit,
     onExportDiary: (Uri) -> Unit,
     onImportDiary: (Uri) -> Unit,
+    onExportAccounting: (Uri) -> Unit,
+    onImportAccounting: (Uri) -> Unit,
     onBackgroundSelected: (String?) -> Unit,
     onLayoutOpacityChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -128,6 +130,20 @@ fun ProfileScreen(
     ) { uri ->
         if (uri != null) {
             onImportDiary(uri)
+        }
+    }
+    val accountingExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null) {
+            onExportAccounting(uri)
+        }
+    }
+    val accountingImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            onImportAccounting(uri)
         }
     }
 
@@ -265,6 +281,34 @@ fun ProfileScreen(
             }
             Text(
                 text = "导出会生成 .diary 文件；导入会用文件内容替换本地缓存。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+            )
+            Button(
+                onClick = { accountingExportLauncher.launch("accounting-export-${LocalDate.now()}.accounting") },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Upload, contentDescription = null)
+                Text("导出账单数据")
+            }
+            Button(
+                onClick = {
+                    accountingImportLauncher.launch(
+                        arrayOf(
+                            "application/octet-stream",
+                            "application/zip",
+                            "application/x-zip-compressed",
+                            "*/*",
+                        ),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Download, contentDescription = null)
+                Text("导入账单数据")
+            }
+            Text(
+                text = "导出会生成 .accounting 文件；导入时可选择替换或合并本地账单。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
             )

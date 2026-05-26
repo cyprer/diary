@@ -1,15 +1,19 @@
 package com.cypress.diary
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,8 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import android.net.Uri
 import android.widget.Toast
+import com.cypress.diary.accounting.mergeAccountingRecords
+import com.cypress.diary.accounting.replaceAccountingRecords
+import com.cypress.diary.export.AccountingExportArchive
 import com.cypress.diary.export.DiaryExportArchive
 import com.cypress.diary.github.GitHubConfig
 import com.cypress.diary.github.GitHubConfigStore
@@ -56,6 +64,7 @@ import com.cypress.diary.ui.screens.EditMode
 import com.cypress.diary.ui.screens.AccountingEditorScreen
 import com.cypress.diary.ui.screens.AccountingLedgerScreen
 import com.cypress.diary.ui.screens.AccountingStatsScreen
+import com.cypress.diary.ui.screens.AccountingStatsMode
 import com.cypress.diary.ui.screens.ProfileScreen
 import com.cypress.diary.ui.screens.SummaryScreen
 import com.cypress.diary.ui.calendar.DiaryCalendarMode
@@ -115,6 +124,7 @@ fun DiaryApp() {
     val weekCodec = remember { DiaryMarkdownCodec() }
     val weekPathResolver = remember { WeekPathResolver() }
     val exportArchive = remember { DiaryExportArchive() }
+    val accountingExportArchive = remember { AccountingExportArchive() }
     val scope = rememberCoroutineScope()
     val initialModule = remember(moduleStore) { moduleStore.load() }
 
@@ -152,11 +162,15 @@ fun DiaryApp() {
     var githubSettingsRevealSignal by rememberSaveable { mutableStateOf(0) }
     var accountingRecords by remember { mutableStateOf(accountingRecordStore.loadRecords()) }
     var accountingMonthValue by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
+    var accountingYearValue by rememberSaveable { mutableStateOf(YearMonth.now().year) }
+    var accountingStatsModeName by rememberSaveable { mutableStateOf(AccountingStatsMode.Month.name) }
     var selectedAccountingRecordId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingAccountingImportRecords by remember { mutableStateOf<List<AccountingRecord>?>(null) }
 
     val selectedDate = LocalDate.parse(selectedDateValue)
     val activeModule = AppModule.valueOf(activeModuleName)
     val accountingMonth = YearMonth.parse(accountingMonthValue)
+    val accountingStatsMode = AccountingStatsMode.valueOf(accountingStatsModeName)
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
     val sampleDocuments = remember(sampleWeeks) {
         sampleWeeks.mapNotNull { week ->
@@ -332,6 +346,68 @@ fun DiaryApp() {
                 Toast.makeText(context, "导入失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    fun exportAccounting(uri: Uri) {
+        scope.launch {
+            if (accountingRecords.isEmpty()) {
+                Toast.makeText(context, "没有可导出的账单数据", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: error("无法打开导出文件")
+                    output.use { stream ->
+                        accountingExportArchive.write(accountingRecords, stream)
+                    }
+                }
+            }.onSuccess {
+                Toast.makeText(context, "账单数据已导出", Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                Toast.makeText(context, "导出失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun importAccounting(uri: Uri) {
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val input = context.contentResolver.openInputStream(uri)
+                        ?: error("无法打开导入文件")
+                    input.use { stream ->
+                        accountingExportArchive.read(stream)
+                    }
+                }
+            }.onSuccess { records ->
+                if (records.isEmpty()) {
+                    Toast.makeText(context, "没有读取到账单数据", Toast.LENGTH_SHORT).show()
+                    return@onSuccess
+                }
+                pendingAccountingImportRecords = records
+            }.onFailure { error ->
+                Toast.makeText(context, "导入失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun applyAccountingImport(replace: Boolean) {
+        val imported = pendingAccountingImportRecords ?: return
+        val nextRecords = if (replace) {
+            replaceAccountingRecords(imported)
+        } else {
+            mergeAccountingRecords(accountingRecords, imported)
+        }
+        accountingRecordStore.saveRecords(nextRecords)
+        accountingRecords = accountingRecordStore.loadRecords()
+        pendingAccountingImportRecords = null
+        Toast.makeText(
+            context,
+            if (replace) "账单数据已替换" else "账单数据已合并",
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     fun saveDocumentLocally(document: DiaryDocument) {
@@ -555,6 +631,8 @@ fun DiaryApp() {
                         },
                         onExportDiary = ::exportDiary,
                         onImportDiary = ::importDiary,
+                        onExportAccounting = ::exportAccounting,
+                        onImportAccounting = ::importAccounting,
                         onBackgroundSelected = { uri ->
                             persistAppearance(backgroundUri = uri)
                         },
@@ -581,6 +659,10 @@ fun DiaryApp() {
                         records = accountingRecords,
                         selectedMonth = accountingMonth,
                         onMonthChange = { month -> accountingMonthValue = month.toString() },
+                        selectedYear = accountingYearValue,
+                        onYearChange = { year -> accountingYearValue = year },
+                        mode = accountingStatsMode,
+                        onModeChange = { mode -> accountingStatsModeName = mode.name },
                         refreshing = false,
                         onRefresh = {},
                         modifier = Modifier.padding(innerPadding),
@@ -683,6 +765,28 @@ fun DiaryApp() {
                         contentLabel = if (editorDocumentPath != null) "总结内容" else if (editorMode == EditMode.Day) "当天内容" else "整周 Markdown",
                     )
                 }
+            }
+            pendingAccountingImportRecords?.let { records ->
+                AlertDialog(
+                    onDismissRequest = { pendingAccountingImportRecords = null },
+                    title = { Text("导入账单数据") },
+                    text = { Text("读取到 ${records.size} 条账单。请选择导入方式。") },
+                    confirmButton = {
+                        TextButton(onClick = { applyAccountingImport(replace = false) }) {
+                            Text("合并到账单")
+                        }
+                    },
+                    dismissButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { applyAccountingImport(replace = true) }) {
+                                Text("替换本地账单")
+                            }
+                            TextButton(onClick = { pendingAccountingImportRecords = null }) {
+                                Text("取消")
+                            }
+                        }
+                    },
+                )
             }
         }
     }
