@@ -55,9 +55,9 @@ import java.time.YearMonth
 enum class AccountingStatsMode(
     val label: String,
 ) {
-    Week("周账"),
-    Month("月账"),
     Year("年账"),
+    Month("月账"),
+    Week("周账"),
 }
 
 @Composable
