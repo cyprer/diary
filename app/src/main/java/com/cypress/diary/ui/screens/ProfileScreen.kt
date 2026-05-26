@@ -199,7 +199,7 @@ fun ProfileScreen(
                     },
                 )
                 Column {
-                    Text("私人日记", fontWeight = FontWeight.SemiBold)
+                    Text("记录日常生活", fontWeight = FontWeight.SemiBold)
                     Text(
                         text = "本地使用",
                         style = MaterialTheme.typography.bodyMedium,
