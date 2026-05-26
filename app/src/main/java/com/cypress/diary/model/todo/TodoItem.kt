@@ -18,4 +18,5 @@ data class TodoItem(
     val createdAt: Long,
     val updatedAt: Long,
     val completedAt: Long?,
+    val reminderAtMillis: Long? = null,
 )

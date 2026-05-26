@@ -56,6 +56,35 @@ class TodoItemStoreTest {
         assertEquals(listOf(item), store.loadItems())
     }
 
+    @Test
+    fun reminderTimeRoundTrips() {
+        val store = TodoItemStore(InMemoryPreferenceStore())
+        val item = item("reminder", reminderAtMillis = 1_779_811_200_000)
+
+        store.saveItems(listOf(item))
+
+        assertEquals(listOf(item), store.loadItems())
+    }
+
+    @Test
+    fun legacyItemsWithoutReminderStillLoad() {
+        val prefs = InMemoryPreferenceStore()
+        val legacy = listOf(
+            "bGVnYWN5",
+            "TGVnYWN5",
+            "",
+            "2026-05-26",
+            "Medium",
+            "false",
+            "10",
+            "20",
+            "",
+        ).joinToString("|")
+        prefs.putString("todo_items", legacy)
+
+        assertEquals(listOf(item("legacy", title = "Legacy", note = "")), TodoItemStore(prefs).loadItems())
+    }
+
     private fun item(
         id: String,
         title: String = id,
@@ -66,6 +95,7 @@ class TodoItemStoreTest {
         createdAt: Long = 10,
         updatedAt: Long = 20,
         completedAt: Long? = if (completed) updatedAt else null,
+        reminderAtMillis: Long? = null,
     ): TodoItem {
         return TodoItem(
             id = id,
@@ -77,6 +107,7 @@ class TodoItemStoreTest {
             createdAt = createdAt,
             updatedAt = updatedAt,
             completedAt = completedAt,
+            reminderAtMillis = reminderAtMillis,
         )
     }
 

@@ -48,12 +48,13 @@ class TodoItemStore(
                 item.createdAt.toString(),
                 item.updatedAt.toString(),
                 item.completedAt?.toString().orEmpty(),
+                item.reminderAtMillis?.toString().orEmpty(),
             ).joinToString("|")
         }
 
         private fun decode(value: String): TodoItem {
             val parts = value.split('|')
-            require(parts.size == 9) { "invalid todo item" }
+            require(parts.size == 9 || parts.size == 10) { "invalid todo item" }
             return TodoItem(
                 id = unsafe(parts[0]),
                 title = unsafe(parts[1]),
@@ -64,6 +65,7 @@ class TodoItemStore(
                 createdAt = parts[6].toLong(),
                 updatedAt = parts[7].toLong(),
                 completedAt = parts[8].takeIf { it.isNotBlank() }?.toLong(),
+                reminderAtMillis = parts.getOrNull(9)?.takeIf { it.isNotBlank() }?.toLong(),
             )
         }
 
