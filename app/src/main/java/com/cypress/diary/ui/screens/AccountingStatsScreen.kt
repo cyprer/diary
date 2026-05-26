@@ -283,7 +283,6 @@ private fun ExpenseLineChartSection(
     chartWidth: Dp = 320.dp,
     horizontallyScrollable: Boolean = false,
 ) {
-    val scrollState = rememberScrollState()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
@@ -296,20 +295,23 @@ private fun ExpenseLineChartSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
             )
-            val chartModifier = if (horizontallyScrollable) {
-                Modifier
-                    .horizontalScroll(scrollState)
-                    .width(chartWidth)
-            } else {
-                Modifier.fillMaxWidth()
-            }
-            ExpenseLineChart(points = points, modifier = chartModifier)
+            ExpenseLineChart(
+                points = points,
+                chartWidth = chartWidth,
+                horizontallyScrollable = horizontallyScrollable,
+            )
         }
     }
 }
 
 @Composable
-private fun ExpenseLineChart(points: List<ExpenseChartPoint>, modifier: Modifier = Modifier) {
+private fun ExpenseLineChart(
+    points: List<ExpenseChartPoint>,
+    chartWidth: Dp,
+    horizontallyScrollable: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val scrollState = rememberScrollState()
     val lineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
     val axisColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
@@ -328,37 +330,46 @@ private fun ExpenseLineChart(points: List<ExpenseChartPoint>, modifier: Modifier
                 Text(formatCompactAmount(midExpense), style = MaterialTheme.typography.bodySmall, color = labelColor)
                 Text("0", style = MaterialTheme.typography.bodySmall, color = labelColor)
             }
-            Canvas(modifier = Modifier.weight(1f).height(150.dp)) {
-                val graphTop = 8.dp.toPx()
-                val graphBottom = size.height - 12.dp.toPx()
-                val graphHeight = graphBottom - graphTop
-                val stepX = if (points.size <= 1) 0f else size.width / (points.size - 1).toFloat()
-                val chartPoints = points.mapIndexed { index, point ->
-                    val x = if (points.size <= 1) size.width / 2f else index * stepX
-                    val ratio = if (maxExpense == 0L) 0f else point.expenseCents.toFloat() / maxExpense.toFloat()
-                    val y = graphBottom - graphHeight * ratio
-                    Offset(x, y)
-                }
-
-                listOf(graphTop, graphTop + graphHeight / 2f, graphBottom).forEach { y ->
-                    drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-                }
-                drawLine(axisColor, Offset(0f, graphTop), Offset(0f, graphBottom), strokeWidth = 1.dp.toPx())
-                drawLine(axisColor, Offset(0f, graphBottom), Offset(size.width, graphBottom), strokeWidth = 1.dp.toPx())
-                chartPoints.zipWithNext().forEach { (start, end) ->
-                    drawLine(lineColor, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-                }
-                chartPoints.forEach { point ->
-                    drawCircle(lineColor, radius = 4.dp.toPx(), center = point)
-                }
+            val plotModifier = if (horizontallyScrollable) {
+                Modifier
+                    .horizontalScroll(scrollState)
+                    .width(chartWidth)
+            } else {
+                Modifier.weight(1f)
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 66.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            points.forEach { point ->
-                Text(point.label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+            Column(modifier = plotModifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Canvas(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    val graphTop = 8.dp.toPx()
+                    val graphBottom = size.height - 12.dp.toPx()
+                    val graphHeight = graphBottom - graphTop
+                    val stepX = if (points.size <= 1) 0f else size.width / (points.size - 1).toFloat()
+                    val chartPoints = points.mapIndexed { index, point ->
+                        val x = if (points.size <= 1) size.width / 2f else index * stepX
+                        val ratio = if (maxExpense == 0L) 0f else point.expenseCents.toFloat() / maxExpense.toFloat()
+                        val y = graphBottom - graphHeight * ratio
+                        Offset(x, y)
+                    }
+
+                    listOf(graphTop, graphTop + graphHeight / 2f, graphBottom).forEach { y ->
+                        drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                    }
+                    drawLine(axisColor, Offset(0f, graphTop), Offset(0f, graphBottom), strokeWidth = 1.dp.toPx())
+                    drawLine(axisColor, Offset(0f, graphBottom), Offset(size.width, graphBottom), strokeWidth = 1.dp.toPx())
+                    chartPoints.zipWithNext().forEach { (start, end) ->
+                        drawLine(lineColor, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                    chartPoints.forEach { point ->
+                        drawCircle(lineColor, radius = 4.dp.toPx(), center = point)
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    points.forEach { point ->
+                        Text(point.label, style = MaterialTheme.typography.bodySmall, color = labelColor)
+                    }
+                }
             }
         }
     }

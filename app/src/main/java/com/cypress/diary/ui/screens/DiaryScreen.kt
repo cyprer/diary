@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -143,21 +144,22 @@ private fun SearchBox(
     onResultSelected: (DiarySearchResult) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(0.70f),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
             singleLine = true,
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(20.dp),
+            textStyle = MaterialTheme.typography.bodySmall,
             trailingIcon = {
                 IconButton(onClick = onSearchSubmit) {
                     Icon(Icons.Filled.Search, contentDescription = "搜索")
                 }
             },
-            placeholder = { Text("搜索日记") },
+            placeholder = { Text("搜索日记", style = MaterialTheme.typography.bodySmall) },
         )
 
         if (query.isNotBlank()) {
