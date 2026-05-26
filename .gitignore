@@ -1,8 +1,10 @@
 .gradle/
+.agents/
 .idea/
 .superpower/
 .superpowers/
 build/
 app/build/
 local.properties
+skills-lock.json
 .worktrees/
