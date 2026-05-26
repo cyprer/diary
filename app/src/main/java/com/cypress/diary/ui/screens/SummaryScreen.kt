@@ -36,7 +36,6 @@ import com.cypress.diary.model.DiaryDocumentType
 import com.cypress.diary.model.WeekKey
 import com.cypress.diary.ui.components.MarkdownDocumentView
 import com.cypress.diary.ui.components.RefreshableScreen
-import com.cypress.diary.ui.components.WeekTree
 import com.cypress.diary.ui.summary.SummaryTree
 import com.cypress.diary.ui.summary.SummaryWordPoint
 import com.cypress.diary.ui.summary.monthLocalWeekDates
@@ -79,12 +78,6 @@ fun SummaryScreen(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
-        Text(
-            text = "点击年份、月份或周查看总结，点击箭头展开。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
-        )
-
         DiarySummaryStatsPanel(
             tree = tree,
             selectedMode = statsMode,
@@ -92,19 +85,6 @@ fun SummaryScreen(
             selectedDate = statsDate,
             onDateChange = { statsDateValue.value = it.toString() },
         )
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp,
-        ) {
-            WeekTree(
-                tree = tree,
-                onDocumentSelected = onDocumentSelected,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-        }
     }
 
     if (selectedDocument != null) {
