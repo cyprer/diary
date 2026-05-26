@@ -1,6 +1,7 @@
 package com.cypress.diary.accounting
 
 import com.cypress.diary.model.accounting.AccountingRecord
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecordType
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -135,6 +136,27 @@ class AccountingSummaryTest {
         assertEquals(AccountingRecordType.Income, merged.first { it.id == "same" }.type)
         assertEquals(900L, merged.first { it.id == "same" }.amountCents)
         assertEquals("new", merged.first { it.id == "same" }.category)
+    }
+
+    @Test
+    fun mergesAccountingCategoriesByTypeAndLabel() {
+        val local = listOf(
+            AccountingCategory("local-coffee", "咖啡", AccountingRecordType.Expense),
+            AccountingCategory("local-part-time", "兼职", AccountingRecordType.Income),
+        )
+        val imported = listOf(
+            AccountingCategory("imported-coffee", "咖啡", AccountingRecordType.Expense),
+            AccountingCategory("imported-coffee-income", "咖啡", AccountingRecordType.Income),
+            AccountingCategory("imported-snack", "零食", AccountingRecordType.Expense),
+        )
+
+        val merged = mergeAccountingCategories(local, imported)
+
+        assertEquals(
+            listOf("咖啡:Expense", "兼职:Income", "咖啡:Income", "零食:Expense"),
+            merged.map { "${it.label}:${it.type.name}" },
+        )
+        assertEquals("local-coffee", merged.first { it.label == "咖啡" && it.type == AccountingRecordType.Expense }.key)
     }
 
     private fun record(

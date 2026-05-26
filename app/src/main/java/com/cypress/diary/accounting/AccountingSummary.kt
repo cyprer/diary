@@ -1,6 +1,7 @@
 package com.cypress.diary.accounting
 
 import com.cypress.diary.model.accounting.AccountingRecord
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecordType
 import java.time.YearMonth
 
@@ -95,4 +96,14 @@ fun mergeAccountingRecords(
 ): List<AccountingRecord> {
     val importedIds = imported.map { it.id }.toSet()
     return sortRecordsForLedger(local.filterNot { it.id in importedIds } + imported)
+}
+
+fun mergeAccountingCategories(
+    local: List<AccountingCategory>,
+    imported: List<AccountingCategory>,
+): List<AccountingCategory> {
+    val seen = mutableSetOf<Pair<AccountingRecordType, String>>()
+    return (local + imported).filter { category ->
+        seen.add(category.type to category.label)
+    }
 }

@@ -133,6 +133,8 @@ GitHub 用户：
 - 账单导入导出使用独立 `.accounting` 文件，本质是 zip 包，入口在“我的”页数据区。
 - `.accounting` 不等于 `.diary`：日记导入导出只处理日记，账单导入导出只处理账单。
 - 导入账单时先读取文件，再让用户选择“替换本地账单”或“合并到账单”。合并按 `id` 去重，导入文件里的同 id 记录覆盖本地记录。
+- 记账编辑页支持自定义分类。自定义分类按收入/支出区分，存储在 `AccountingCategoryStore`，并会随 `.accounting` 文件一起导出导入。
+- 自定义分类导入时按 `type + label` 去重。替换导入会替换本地自定义分类，合并导入会保留本地独有分类。
 
 历史 bug：
 
@@ -149,6 +151,7 @@ GitHub 用户：
 - `AccountingSummaryTest.kt`
 - `AccountingRecordStoreTest.kt`
 - `AccountingExportArchiveTest.kt`
+- `AccountingCategoryStoreTest.kt`
 
 ## 周逻辑的坑
 

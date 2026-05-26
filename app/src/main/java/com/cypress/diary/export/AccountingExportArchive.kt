@@ -1,5 +1,6 @@
 package com.cypress.diary.export
 
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
 import java.io.InputStream
@@ -12,28 +13,47 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+data class AccountingArchiveData(
+    val records: List<AccountingRecord>,
+    val customCategories: List<AccountingCategory>,
+)
+
 class AccountingExportArchive(
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
     fun write(records: List<AccountingRecord>, output: OutputStream) {
+        write(AccountingArchiveData(records = records, customCategories = emptyList()), output)
+    }
+
+    fun write(data: AccountingArchiveData, output: OutputStream) {
         ZipOutputStream(output).use { zip ->
-            zip.writeTextEntry("manifest.json", manifestFor(records))
-            zip.writeTextEntry("records.json", recordsJson(records))
+            zip.writeTextEntry("manifest.json", manifestFor(data.records))
+            zip.writeTextEntry("records.json", recordsJson(data.records))
+            zip.writeTextEntry("categories.json", categoriesJson(data.customCategories))
         }
     }
 
     fun read(input: InputStream): List<AccountingRecord> {
+        return readData(input).records
+    }
+
+    fun readData(input: InputStream): AccountingArchiveData {
+        var records = emptyList<AccountingRecord>()
+        var customCategories = emptyList<AccountingCategory>()
         ZipInputStream(input).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory && entry.name == "records.json") {
                     val text = zip.readBytes().toString(StandardCharsets.UTF_8)
-                    return parseRecords(text)
+                    records = parseRecords(text)
+                } else if (!entry.isDirectory && entry.name == "categories.json") {
+                    val text = zip.readBytes().toString(StandardCharsets.UTF_8)
+                    customCategories = parseCategories(text)
                 }
                 entry = zip.nextEntry
             }
         }
-        return emptyList()
+        return AccountingArchiveData(records = records, customCategories = customCategories)
     }
 
     private fun manifestFor(records: List<AccountingRecord>): String {
@@ -67,6 +87,22 @@ class AccountingExportArchive(
         }
     }
 
+    private fun categoriesJson(categories: List<AccountingCategory>): String {
+        return categories.joinToString(
+            separator = ",\n",
+            prefix = "[\n",
+            postfix = "\n]",
+        ) { category ->
+            """
+              {
+                "key": ${quoteJson(category.key)},
+                "label": ${quoteJson(category.label)},
+                "type": ${quoteJson(category.type.name)}
+              }
+            """.trimIndent()
+        }
+    }
+
     private fun parseRecords(text: String): List<AccountingRecord> {
         return jsonObjects(text).mapNotNull { objectText ->
             runCatching {
@@ -79,6 +115,18 @@ class AccountingExportArchive(
                     note = requireString(objectText, "note"),
                     createdAt = requireLong(objectText, "createdAt"),
                     updatedAt = requireLong(objectText, "updatedAt"),
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun parseCategories(text: String): List<AccountingCategory> {
+        return jsonObjects(text).mapNotNull { objectText ->
+            runCatching {
+                AccountingCategory(
+                    key = requireString(objectText, "key"),
+                    label = requireString(objectText, "label"),
+                    type = AccountingRecordType.valueOf(requireString(objectText, "type")),
                 )
             }.getOrNull()
         }

@@ -1,6 +1,7 @@
 package com.cypress.diary.export
 
 import com.cypress.diary.model.accounting.AccountingRecord
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecordType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -53,6 +54,45 @@ class AccountingExportArchiveTest {
         assertEquals(AccountingRecordType.Income, parsed[0].type)
         assertEquals(12345L, parsed[0].amountCents)
         assertEquals("bonus", parsed[0].note)
+    }
+
+    @Test
+    fun writesAndReadsCustomCategories() {
+        val archive = AccountingExportArchive()
+        val output = ByteArrayOutputStream()
+        val categories = listOf(
+            AccountingCategory("custom-coffee", "咖啡", AccountingRecordType.Expense),
+            AccountingCategory("custom-part-time", "兼职", AccountingRecordType.Income),
+        )
+
+        archive.write(
+            data = AccountingArchiveData(
+                records = listOf(record("expense-1", AccountingRecordType.Expense)),
+                customCategories = categories,
+            ),
+            output = output,
+        )
+
+        val entries = unzip(output.toByteArray())
+        assertTrue(entries.containsKey("categories.json"))
+        assertTrue(entries.getValue("categories.json").contains("\"label\": \"咖啡\""))
+        val parsed = archive.readData(ByteArrayInputStream(output.toByteArray()))
+        assertEquals(categories, parsed.customCategories)
+        assertEquals(listOf("expense-1"), parsed.records.map { it.id })
+    }
+
+    @Test
+    fun readsOldArchivesWithoutCustomCategories() {
+        val output = ByteArrayOutputStream()
+        AccountingExportArchive().write(
+            records = listOf(record("old", AccountingRecordType.Expense)),
+            output = output,
+        )
+
+        val parsed = AccountingExportArchive().readData(ByteArrayInputStream(output.toByteArray()))
+
+        assertEquals(listOf("old"), parsed.records.map { it.id })
+        assertEquals(emptyList<AccountingCategory>(), parsed.customCategories)
     }
 
     @Test

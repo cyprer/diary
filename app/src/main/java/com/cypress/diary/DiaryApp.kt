@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import android.net.Uri
 import android.widget.Toast
 import com.cypress.diary.accounting.mergeAccountingRecords
+import com.cypress.diary.accounting.mergeAccountingCategories
 import com.cypress.diary.accounting.replaceAccountingRecords
+import com.cypress.diary.export.AccountingArchiveData
 import com.cypress.diary.export.AccountingExportArchive
 import com.cypress.diary.export.DiaryExportArchive
 import com.cypress.diary.github.GitHubConfig
@@ -41,12 +43,16 @@ import com.cypress.diary.model.DiaryDocumentType
 import com.cypress.diary.model.DiaryDay
 import com.cypress.diary.model.DiaryWeek
 import com.cypress.diary.model.WeekKey
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecord
+import com.cypress.diary.model.accounting.AccountingRecordType
+import com.cypress.diary.model.accounting.defaultAccountingCategories
 import com.cypress.diary.parser.DiaryDocumentCodec
 import com.cypress.diary.parser.DiaryMarkdownCodec
 import com.cypress.diary.parser.WeekPathResolver
 import com.cypress.diary.quote.DailyQuoteRepository
 import com.cypress.diary.storage.AccountingRecordStore
+import com.cypress.diary.storage.AccountingCategoryStore
 import com.cypress.diary.storage.AppAppearanceStore
 import com.cypress.diary.storage.AppModuleStore
 import com.cypress.diary.storage.DailyQuoteStore
@@ -115,6 +121,9 @@ fun DiaryApp() {
     val accountingRecordStore = remember(context) {
         AccountingRecordStore(context.getSharedPreferences("accounting_records", android.content.Context.MODE_PRIVATE))
     }
+    val accountingCategoryStore = remember(context) {
+        AccountingCategoryStore(context.getSharedPreferences("accounting_categories", android.content.Context.MODE_PRIVATE))
+    }
     val repository = remember { GitHubDiaryRepository() }
     val quoteRepository = remember { DailyQuoteRepository() }
     val sampleWeeks = remember { sampleDiaryWeeks() }
@@ -161,16 +170,18 @@ fun DiaryApp() {
     var profileHiddenLastTapAt by rememberSaveable { mutableStateOf(0L) }
     var githubSettingsRevealSignal by rememberSaveable { mutableStateOf(0) }
     var accountingRecords by remember { mutableStateOf(accountingRecordStore.loadRecords()) }
+    var customAccountingCategories by remember { mutableStateOf(accountingCategoryStore.loadCategories()) }
     var accountingMonthValue by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var accountingYearValue by rememberSaveable { mutableStateOf(YearMonth.now().year) }
     var accountingStatsModeName by rememberSaveable { mutableStateOf(AccountingStatsMode.Month.name) }
     var selectedAccountingRecordId by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingAccountingImportRecords by remember { mutableStateOf<List<AccountingRecord>?>(null) }
+    var pendingAccountingImportData by remember { mutableStateOf<AccountingArchiveData?>(null) }
 
     val selectedDate = LocalDate.parse(selectedDateValue)
     val activeModule = AppModule.valueOf(activeModuleName)
     val accountingMonth = YearMonth.parse(accountingMonthValue)
     val accountingStatsMode = AccountingStatsMode.valueOf(accountingStatsModeName)
+    val accountingCategories = defaultAccountingCategories + customAccountingCategories
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
     val sampleDocuments = remember(sampleWeeks) {
         sampleWeeks.mapNotNull { week ->
@@ -277,6 +288,21 @@ fun DiaryApp() {
         accountingRecords = accountingRecordStore.loadRecords()
     }
 
+    fun addAccountingCategory(type: AccountingRecordType, label: String): AccountingCategory {
+        val normalized = label.trim()
+        val existing = accountingCategories.firstOrNull { it.type == type && it.label == normalized }
+        if (existing != null) return existing
+        val category = AccountingCategory(
+            key = "custom_${type.name}_${System.currentTimeMillis()}",
+            label = normalized,
+            type = type,
+        )
+        val nextCategories = customAccountingCategories + category
+        accountingCategoryStore.saveCategories(nextCategories)
+        customAccountingCategories = accountingCategoryStore.loadCategories()
+        return category
+    }
+
     fun revealGitHubSettingsFromProfileTab() {
         val now = System.currentTimeMillis()
         profileHiddenTapCount = if (now - profileHiddenLastTapAt <= 1_000L) {
@@ -360,7 +386,13 @@ fun DiaryApp() {
                     val output = context.contentResolver.openOutputStream(uri)
                         ?: error("无法打开导出文件")
                     output.use { stream ->
-                        accountingExportArchive.write(accountingRecords, stream)
+                        accountingExportArchive.write(
+                            AccountingArchiveData(
+                                records = accountingRecords,
+                                customCategories = customAccountingCategories,
+                            ),
+                            stream,
+                        )
                     }
                 }
             }.onSuccess {
@@ -378,15 +410,15 @@ fun DiaryApp() {
                     val input = context.contentResolver.openInputStream(uri)
                         ?: error("无法打开导入文件")
                     input.use { stream ->
-                        accountingExportArchive.read(stream)
+                        accountingExportArchive.readData(stream)
                     }
                 }
-            }.onSuccess { records ->
-                if (records.isEmpty()) {
+            }.onSuccess { data ->
+                if (data.records.isEmpty() && data.customCategories.isEmpty()) {
                     Toast.makeText(context, "没有读取到账单数据", Toast.LENGTH_SHORT).show()
                     return@onSuccess
                 }
-                pendingAccountingImportRecords = records
+                pendingAccountingImportData = data
             }.onFailure { error ->
                 Toast.makeText(context, "导入失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
             }
@@ -394,15 +426,22 @@ fun DiaryApp() {
     }
 
     fun applyAccountingImport(replace: Boolean) {
-        val imported = pendingAccountingImportRecords ?: return
+        val imported = pendingAccountingImportData ?: return
         val nextRecords = if (replace) {
-            replaceAccountingRecords(imported)
+            replaceAccountingRecords(imported.records)
         } else {
-            mergeAccountingRecords(accountingRecords, imported)
+            mergeAccountingRecords(accountingRecords, imported.records)
+        }
+        val nextCategories = if (replace) {
+            imported.customCategories
+        } else {
+            mergeAccountingCategories(customAccountingCategories, imported.customCategories)
         }
         accountingRecordStore.saveRecords(nextRecords)
+        accountingCategoryStore.saveCategories(nextCategories)
         accountingRecords = accountingRecordStore.loadRecords()
-        pendingAccountingImportRecords = null
+        customAccountingCategories = accountingCategoryStore.loadCategories()
+        pendingAccountingImportData = null
         Toast.makeText(
             context,
             if (replace) "账单数据已替换" else "账单数据已合并",
@@ -670,6 +709,8 @@ fun DiaryApp() {
 
                     DiaryRoute.AccountingEditor.route -> AccountingEditorScreen(
                         record = selectedAccountingRecord,
+                        categories = accountingCategories,
+                        onAddCategory = ::addAccountingCategory,
                         refreshing = false,
                         onRefresh = {},
                         onBack = {
@@ -766,11 +807,11 @@ fun DiaryApp() {
                     )
                 }
             }
-            pendingAccountingImportRecords?.let { records ->
+            pendingAccountingImportData?.let { data ->
                 AlertDialog(
-                    onDismissRequest = { pendingAccountingImportRecords = null },
+                    onDismissRequest = { pendingAccountingImportData = null },
                     title = { Text("导入账单数据") },
-                    text = { Text("读取到 ${records.size} 条账单。请选择导入方式。") },
+                    text = { Text("读取到 ${data.records.size} 条账单、${data.customCategories.size} 个自定义分类。请选择导入方式。") },
                     confirmButton = {
                         TextButton(onClick = { applyAccountingImport(replace = false) }) {
                             Text("合并到账单")
@@ -781,7 +822,7 @@ fun DiaryApp() {
                             TextButton(onClick = { applyAccountingImport(replace = true) }) {
                                 Text("替换本地账单")
                             }
-                            TextButton(onClick = { pendingAccountingImportRecords = null }) {
+                            TextButton(onClick = { pendingAccountingImportData = null }) {
                                 Text("取消")
                             }
                         }

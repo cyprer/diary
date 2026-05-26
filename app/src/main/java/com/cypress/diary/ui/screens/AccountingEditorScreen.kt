@@ -28,9 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.accounting.formatAmountCents
 import com.cypress.diary.accounting.parseAmountCents
+import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
-import com.cypress.diary.model.accounting.defaultAccountingCategories
 import com.cypress.diary.ui.components.RefreshableScreen
 import java.time.LocalDate
 import java.util.UUID
@@ -39,6 +39,8 @@ import java.util.UUID
 @Composable
 fun AccountingEditorScreen(
     record: AccountingRecord?,
+    categories: List<AccountingCategory>,
+    onAddCategory: (AccountingRecordType, String) -> AccountingCategory,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
@@ -54,13 +56,15 @@ fun AccountingEditorScreen(
         mutableStateOf(record?.amountCents?.let(::formatAmountCents).orEmpty())
     }
     var category by rememberSaveable(record?.id) {
-        mutableStateOf(record?.category ?: defaultAccountingCategories.first { it.type == type }.label)
+        mutableStateOf(record?.category ?: categories.firstOrNull { it.type == type }?.label.orEmpty())
     }
     var dateText by rememberSaveable(record?.id) {
         mutableStateOf(record?.date?.toString() ?: LocalDate.now().toString())
     }
     var note by rememberSaveable(record?.id) { mutableStateOf(record?.note.orEmpty()) }
     var showDeleteConfirm by rememberSaveable(record?.id) { mutableStateOf(false) }
+    var showCategoryDialog by rememberSaveable(record?.id) { mutableStateOf(false) }
+    var newCategoryName by rememberSaveable(record?.id) { mutableStateOf("") }
     val amountCents = parseAmountCents(amountText)
     val parsedDate = runCatching { LocalDate.parse(dateText) }.getOrNull()
     val canSave = amountCents != null && parsedDate != null && category.isNotBlank()
@@ -95,7 +99,7 @@ fun AccountingEditorScreen(
                     selected = type == option,
                     onClick = {
                         typeName = option.name
-                        category = defaultAccountingCategories.first { it.type == option }.label
+                        category = categories.firstOrNull { it.type == option }?.label.orEmpty()
                     },
                     label = { Text(option.label) },
                 )
@@ -135,13 +139,21 @@ fun AccountingEditorScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            defaultAccountingCategories.filter { it.type == type }.forEach { option ->
+            categories.filter { it.type == type }.forEach { option ->
                 FilterChip(
                     selected = category == option.label,
                     onClick = { category = option.label },
                     label = { Text(option.label) },
                 )
             }
+            FilterChip(
+                selected = false,
+                onClick = {
+                    newCategoryName = ""
+                    showCategoryDialog = true
+                },
+                label = { Text("+ 新分类") },
+            )
         }
 
         OutlinedTextField(
@@ -195,6 +207,39 @@ fun AccountingEditorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
+    if (showCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showCategoryDialog = false },
+            title = { Text("新增分类") },
+            text = {
+                OutlinedTextField(
+                    value = newCategoryName,
+                    onValueChange = { newCategoryName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("${type.label}分类名称") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newCategoryName.isNotBlank(),
+                    onClick = {
+                        val added = onAddCategory(type, newCategoryName.trim())
+                        category = added.label
+                        showCategoryDialog = false
+                    },
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCategoryDialog = false }) {
                     Text("取消")
                 }
             },
