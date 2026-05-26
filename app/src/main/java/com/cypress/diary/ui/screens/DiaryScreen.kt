@@ -143,7 +143,7 @@ private fun SearchBox(
     onResultSelected: (DiarySearchResult) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(0.92f),
+        modifier = Modifier.fillMaxWidth(0.70f),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedTextField(
