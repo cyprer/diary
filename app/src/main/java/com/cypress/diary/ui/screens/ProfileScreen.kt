@@ -214,7 +214,7 @@ fun ProfileScreen(
         AccountCard {
             Text("模块", fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppModule.values().forEach { module ->
+                AppModule.selectable.forEach { module ->
                     FilterChip(
                         selected = currentModule == module,
                         onClick = { onModuleSelected(module) },

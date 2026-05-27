@@ -31,6 +31,22 @@ class TodoReminderTimeTest {
     }
 
     @Test
+    fun parsesTimeOnSelectedDate() {
+        val date = LocalDate.of(2026, 5, 26)
+        val millis = parseReminderTimeOnDate("08:05", date, zone)
+
+        assertEquals("2026-05-26 08:05", formatReminderMillis(requireNotNull(millis), zone))
+    }
+
+    @Test
+    fun rejectsMalformedTimeOnSelectedDate() {
+        val date = LocalDate.of(2026, 5, 26)
+
+        assertNull(parseReminderTimeOnDate("8:05", date, zone))
+        assertNull(parseReminderTimeOnDate("2026-05-26 08:05", date, zone))
+    }
+
+    @Test
     fun detectsPastReminders() {
         val now = requireNotNull(parseReminderMillis("2026-05-26 20:30", zone))
         val past = requireNotNull(parseReminderMillis("2026-05-26 20:29", zone))

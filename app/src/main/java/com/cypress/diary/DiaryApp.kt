@@ -220,9 +220,9 @@ fun DiaryApp() {
         todoReminderScheduler.scheduleAll(todoItems)
     }
 
-    LaunchedEffect(activeModule) {
+    LaunchedEffect(activeModule, route) {
         if (
-            activeModule == AppModule.Todo &&
+            (activeModule == AppModule.Todo || route == DiaryRoute.TodoEditor.route) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -1135,7 +1135,9 @@ internal fun isGitHubSettingsSearchQuery(query: String): Boolean {
 internal fun isBottomRouteSelected(rootRoute: DiaryRoute?, route: String): Boolean {
     return when (rootRoute) {
         null -> false
-        DiaryRoute.Diary -> route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route
+        DiaryRoute.Diary -> route == DiaryRoute.Diary.route ||
+            route == DiaryRoute.Editor.route ||
+            route == DiaryRoute.TodoEditor.route
         DiaryRoute.Ledger -> route == DiaryRoute.Ledger.route || route == DiaryRoute.AccountingEditor.route
         DiaryRoute.TodoList -> route == DiaryRoute.TodoList.route || route == DiaryRoute.TodoEditor.route
         else -> route == rootRoute.route

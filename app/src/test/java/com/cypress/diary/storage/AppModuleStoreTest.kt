@@ -22,12 +22,11 @@ class AppModuleStoreTest {
     }
 
     @Test
-    fun savesAndLoadsTodoModule() {
-        val store = AppModuleStore(InMemoryPreferenceStore())
+    fun legacyTodoModuleFallsBackToDiary() {
+        val prefs = InMemoryPreferenceStore()
+        prefs.putString("app_module", AppModule.Todo.name)
 
-        store.save(AppModule.Todo)
-
-        assertEquals(AppModule.Todo, store.load())
+        assertEquals(AppModule.Diary, AppModuleStore(prefs).load())
     }
 
     @Test

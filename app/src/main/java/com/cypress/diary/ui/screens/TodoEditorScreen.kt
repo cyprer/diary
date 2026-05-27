@@ -28,10 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.model.todo.TodoPriority
-import com.cypress.diary.todo.formatReminderMillis
+import com.cypress.diary.todo.formatReminderTime
 import com.cypress.diary.todo.isPastReminder
-import com.cypress.diary.todo.parseReminderMillis
-import com.cypress.diary.todo.reminderTextFor
+import com.cypress.diary.todo.parseReminderTimeOnDate
 import com.cypress.diary.ui.components.RefreshableScreen
 import java.time.LocalDate
 import java.util.UUID
@@ -50,19 +49,17 @@ fun TodoEditorScreen(
 ) {
     var title by rememberSaveable(item?.id) { mutableStateOf(item?.title.orEmpty()) }
     var note by rememberSaveable(item?.id) { mutableStateOf(item?.note.orEmpty()) }
-    var priorityName by rememberSaveable(item?.id) { mutableStateOf(item?.priority?.name ?: TodoPriority.Medium.name) }
-    var dueDateText by rememberSaveable(item?.id) { mutableStateOf(item?.dueDate?.toString().orEmpty()) }
-    var reminderText by rememberSaveable(item?.id) {
-        mutableStateOf(item?.reminderAtMillis?.let(::formatReminderMillis).orEmpty())
+    var reminderTimeText by rememberSaveable(item?.id, initialDate.toString()) {
+        mutableStateOf(item?.reminderAtMillis?.let(::formatReminderTime).orEmpty())
     }
     var showDeleteConfirm by rememberSaveable(item?.id) { mutableStateOf(false) }
-    val dueDate = dueDateText.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    val dueDateInvalid = dueDateText.isNotBlank() && dueDate == null
-    val reminderMillis = reminderText.takeIf { it.isNotBlank() }?.let(::parseReminderMillis)
-    val reminderInvalid = reminderText.isNotBlank() && reminderMillis == null
+    val reminderMillis = reminderTimeText.takeIf { it.isNotBlank() }?.let { time ->
+        parseReminderTimeOnDate(time, initialDate)
+    }
+    val reminderMissing = reminderTimeText.isBlank()
+    val reminderInvalid = reminderTimeText.isNotBlank() && reminderMillis == null
     val reminderPast = reminderMillis?.let(::isPastReminder) == true
-    val canSave = title.isNotBlank() && !dueDateInvalid && !reminderInvalid && !reminderPast
-    val priority = TodoPriority.valueOf(priorityName)
+    val canSave = title.isNotBlank() && !reminderMissing && !reminderInvalid && !reminderPast
 
     RefreshableScreen(
         refreshing = refreshing,
@@ -102,99 +99,35 @@ fun TodoEditorScreen(
             minLines = 3,
         )
 
-        Text("截止日期", fontWeight = FontWeight.SemiBold)
+        Text("当天提醒时间", fontWeight = FontWeight.SemiBold)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilterChip(
-                selected = dueDateText.isBlank(),
-                onClick = { dueDateText = "" },
-                label = { Text("无日期") },
-            )
-            FilterChip(
-                selected = dueDateText == initialDate.toString(),
-                onClick = { dueDateText = initialDate.toString() },
-                label = { Text("今天") },
-            )
-            FilterChip(
-                selected = dueDateText == initialDate.plusDays(1).toString(),
-                onClick = { dueDateText = initialDate.plusDays(1).toString() },
-                label = { Text("明天") },
-            )
-        }
-
-        OutlinedTextField(
-            value = dueDateText,
-            onValueChange = { dueDateText = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("日期 YYYY-MM-DD") },
-            singleLine = true,
-            isError = dueDateInvalid,
-            supportingText = {
-                if (dueDateInvalid) {
-                    Text("日期格式示例：2026-05-26")
-                }
-            },
-        )
-
-        Text("提醒时间", fontWeight = FontWeight.SemiBold)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = reminderText.isBlank(),
-                onClick = { reminderText = "" },
-                label = { Text("无提醒") },
-            )
-            FilterChip(
-                selected = reminderText == reminderTextFor(initialDate, 20, 0),
-                onClick = { reminderText = reminderTextFor(initialDate, 20, 0) },
-                label = { Text("今天 20:00") },
-            )
-            FilterChip(
-                selected = reminderText == reminderTextFor(initialDate.plusDays(1), 9, 0),
-                onClick = { reminderText = reminderTextFor(initialDate.plusDays(1), 9, 0) },
-                label = { Text("明天 09:00") },
-            )
-            if (dueDate != null) {
+            listOf("09:00", "12:00", "18:00", "20:00").forEach { time ->
                 FilterChip(
-                    selected = reminderText == reminderTextFor(dueDate, 9, 0),
-                    onClick = { reminderText = reminderTextFor(dueDate, 9, 0) },
-                    label = { Text("截止日 09:00") },
+                    selected = reminderTimeText == time,
+                    onClick = { reminderTimeText = time },
+                    label = { Text(time) },
                 )
             }
         }
 
         OutlinedTextField(
-            value = reminderText,
-            onValueChange = { reminderText = it },
+            value = reminderTimeText,
+            onValueChange = { reminderTimeText = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("提醒 YYYY-MM-DD HH:mm") },
+            label = { Text("${initialDate} HH:mm") },
             singleLine = true,
-            isError = reminderInvalid || reminderPast,
+            isError = reminderMissing || reminderInvalid || reminderPast,
             supportingText = {
                 when {
-                    reminderInvalid -> Text("提醒格式示例：2026-05-26 20:00")
+                    reminderMissing -> Text("请选择或输入当天提醒时间")
+                    reminderInvalid -> Text("时间格式示例：08:30")
                     reminderPast -> Text("提醒时间必须晚于当前时间")
                 }
             },
         )
-
-        Text("优先级", fontWeight = FontWeight.SemiBold)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TodoPriority.entries.forEach { option ->
-                FilterChip(
-                    selected = priority == option,
-                    onClick = { priorityName = option.name },
-                    label = { Text(option.label) },
-                )
-            }
-        }
 
         Button(
             enabled = canSave,
@@ -205,9 +138,9 @@ fun TodoEditorScreen(
                         id = item?.id ?: UUID.randomUUID().toString(),
                         title = title.trim(),
                         note = note.trim(),
-                        dueDate = dueDate,
+                        dueDate = initialDate,
                         reminderAtMillis = reminderMillis,
-                        priority = priority,
+                        priority = TodoPriority.Medium,
                         completed = item?.completed ?: false,
                         createdAt = item?.createdAt ?: now,
                         updatedAt = now,
