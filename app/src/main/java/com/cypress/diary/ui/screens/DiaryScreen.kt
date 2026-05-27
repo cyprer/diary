@@ -7,7 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +26,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +64,7 @@ fun DiaryScreen(
     todoItems: List<TodoItem>,
     onTodoSelected: (TodoItem) -> Unit,
     onTodoToggle: (TodoItem) -> Unit,
+    onTodoDeleteSelected: (List<TodoItem>) -> Unit,
     searchQuery: String,
     searchResults: List<DiarySearchResult>,
     onSearchQueryChange: (String) -> Unit,
@@ -108,6 +115,7 @@ fun DiaryScreen(
                 items = todoItems,
                 onTodoSelected = onTodoSelected,
                 onTodoToggle = onTodoToggle,
+                onTodoDeleteSelected = onTodoDeleteSelected,
             )
         }
     }
@@ -118,7 +126,14 @@ private fun DayTodoSection(
     items: List<TodoItem>,
     onTodoSelected: (TodoItem) -> Unit,
     onTodoToggle: (TodoItem) -> Unit,
+    onTodoDeleteSelected: (List<TodoItem>) -> Unit,
 ) {
+    var selectedIds by rememberSaveable(items.map { it.id }.joinToString("|")) {
+        mutableStateOf(emptySet<String>())
+    }
+    val selectedItems = items.filter { item -> item.id in selectedIds }
+    val selecting = selectedIds.isNotEmpty()
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
@@ -129,7 +144,32 @@ private fun DayTodoSection(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("当天待办", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (selecting) "已选择 ${selectedIds.size} 个" else "当天待办",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (selecting) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { selectedIds = emptySet() }) {
+                            Text("取消")
+                        }
+                        TextButton(
+                            onClick = {
+                                onTodoDeleteSelected(selectedItems)
+                                selectedIds = emptySet()
+                            },
+                        ) {
+                            Text("删除")
+                        }
+                    }
+                }
+            }
             if (items.isEmpty()) {
                 Text(
                     text = "当天暂无待办",
@@ -140,7 +180,16 @@ private fun DayTodoSection(
                 items.forEach { item ->
                     DayTodoRow(
                         item = item,
-                        onClick = { onTodoSelected(item) },
+                        selecting = selecting,
+                        selected = item.id in selectedIds,
+                        onClick = {
+                            if (selecting) {
+                                selectedIds = toggleSelection(selectedIds, item.id)
+                            } else {
+                                onTodoSelected(item)
+                            }
+                        },
+                        onLongClick = { selectedIds = toggleSelection(selectedIds, item.id) },
                         onToggle = { onTodoToggle(item) },
                     )
                 }
@@ -149,22 +198,35 @@ private fun DayTodoSection(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayTodoRow(
     item: TodoItem,
+    selecting: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onToggle: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Checkbox(
-            checked = item.completed,
-            onCheckedChange = { onToggle() },
+            checked = if (selecting) selected else item.completed,
+            onCheckedChange = {
+                if (selecting) {
+                    onClick()
+                } else {
+                    onToggle()
+                }
+            },
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -182,6 +244,14 @@ private fun DayTodoRow(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
             )
         }
+    }
+}
+
+private fun toggleSelection(selectedIds: Set<String>, id: String): Set<String> {
+    return if (id in selectedIds) {
+        selectedIds - id
+    } else {
+        selectedIds + id
     }
 }
 

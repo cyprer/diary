@@ -384,6 +384,13 @@ fun DiaryApp() {
         todoItems = todoItemStore.loadItems()
     }
 
+    fun deleteTodoItems(items: List<TodoItem>) {
+        val ids = items.map { it.id }.toSet()
+        ids.forEach(todoReminderScheduler::cancel)
+        todoItemStore.saveItems(todoItems.filterNot { it.id in ids })
+        todoItems = todoItemStore.loadItems()
+    }
+
     fun toggleTodoItem(item: TodoItem) {
         val now = System.currentTimeMillis()
         saveTodoItem(
@@ -773,6 +780,7 @@ fun DiaryApp() {
                             route = DiaryRoute.TodoEditor.route
                         },
                         onTodoToggle = ::toggleTodoItem,
+                        onTodoDeleteSelected = ::deleteTodoItems,
                         searchQuery = diarySearchQuery,
                         searchResults = diarySearchResults,
                         onSearchQueryChange = { diarySearchQuery = it },
