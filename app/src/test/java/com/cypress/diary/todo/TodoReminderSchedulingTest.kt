@@ -17,6 +17,30 @@ class TodoReminderSchedulingTest {
         assertFalse(shouldScheduleReminder(item(reminderAtMillis = 101L, completed = true), now))
     }
 
+    @Test
+    fun detectsPendingFutureReminders() {
+        val now = 100L
+
+        assertTrue(
+            hasFutureTodoReminders(
+                listOf(
+                    item(reminderAtMillis = null),
+                    item(reminderAtMillis = 101L),
+                ),
+                now,
+            ),
+        )
+        assertFalse(
+            hasFutureTodoReminders(
+                listOf(
+                    item(reminderAtMillis = 100L),
+                    item(reminderAtMillis = 101L, completed = true),
+                ),
+                now,
+            ),
+        )
+    }
+
     private fun item(
         reminderAtMillis: Long?,
         completed: Boolean = false,

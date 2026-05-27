@@ -15,7 +15,7 @@ dailylife.apk
 1. 在 GitHub Releases 下载 `dailylife.apk`。
 2. 打开 APK 文件并允许“安装未知来源应用”。
 3. 安装完成后打开 `dailylife`。
-4. 如果系统提示通知权限，请允许；Android 13 及以上版本需要该权限才能弹出待办提醒通知。
+4. 如果系统提示通知权限或精确闹钟权限，请允许；Android 13 及以上版本需要通知权限，Android 12 及以上版本可能需要精确闹钟权限才能按时触发待办提醒。
 
 也可以通过 ADB 安装仓库内的 APK：
 
