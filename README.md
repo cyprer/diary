@@ -1,23 +1,22 @@
 # dailylife
 
-一个 Android 日记、记账和待办应用，已提供可直接安装的 APK。
+一个 Android 日记和记账应用，已提供可直接安装的 APK。
 
 ## 直接安装
 
-GitHub Release 中提供安装包：
+仓库内已放置安装包：
 
 ```text
-dailylife.apk
+release/dailylife.apk
 ```
 
 安装方式：
 
-1. 在 GitHub Releases 下载 `dailylife.apk`。
+1. 在手机上下载 `release/dailylife.apk`。
 2. 打开 APK 文件并允许“安装未知来源应用”。
 3. 安装完成后打开 `dailylife`。
-4. 如果系统提示通知权限或精确闹钟权限，请允许；Android 13 及以上版本需要通知权限，Android 12 及以上版本的闹钟提醒可能需要精确闹钟权限。
 
-也可以通过 ADB 安装仓库内的 APK：
+也可以通过 ADB 安装：
 
 ```powershell
 adb install -r release\dailylife.apk
@@ -29,7 +28,6 @@ adb install -r release\dailylife.apk
 - 搜索：按关键词搜索已有日记。
 - 总结：支持年总结、月总结、周总结和字数统计。
 - 记账：记录收入和支出，支持分类、账本列表和统计图表。
-- 待办：在日记日历选中的具体日期上添加和查看当天待办，只需填写当天提醒时间，并可选择闹钟、通知或震动提醒。闹钟模式会打开全屏响铃页，提醒使用系统调度，重启手机后会恢复未完成任务的未来提醒。
 - 数据迁移：日记支持 `.diary` 导入/导出，记账支持 `.accounting` 导入/导出。
 - 个性化：支持主题色、背景图片和界面透明度设置。
 
@@ -59,5 +57,6 @@ app/build/outputs/apk/debug/app-debug.apk
 
 - `release/dailylife.apk`：可直接安装的 APK。
 - `app/`：Android 应用源码。
-- `docs/`：设计和实现资料，方便学习项目演进过程。
 - `gradle/`、`build.gradle.kts`、`settings.gradle.kts`：构建配置。
+
+仓库不再保留 AI 生成过程文档、设计草稿和临时说明文件。

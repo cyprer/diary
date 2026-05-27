@@ -22,14 +22,6 @@ class AppModuleStoreTest {
     }
 
     @Test
-    fun legacyTodoModuleFallsBackToDiary() {
-        val prefs = InMemoryPreferenceStore()
-        prefs.putString("app_module", AppModule.Todo.name)
-
-        assertEquals(AppModule.Diary, AppModuleStore(prefs).load())
-    }
-
-    @Test
     fun malformedValueFallsBackToDiary() {
         val prefs = InMemoryPreferenceStore()
         prefs.putString("app_module", "unknown")

@@ -14,7 +14,6 @@ class DiaryAppNavigationTest {
     @Test
     fun bottomNavigationSelectionGroupsEditorRoutesUnderTheirRoots() {
         assertTrue(isBottomRouteSelected(DiaryRoute.Diary, DiaryRoute.Editor.route))
-        assertTrue(isBottomRouteSelected(DiaryRoute.Diary, DiaryRoute.TodoEditor.route))
         assertTrue(isBottomRouteSelected(DiaryRoute.Ledger, DiaryRoute.AccountingEditor.route))
     }
 

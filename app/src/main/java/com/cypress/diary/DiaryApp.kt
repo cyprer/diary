@@ -1,19 +1,12 @@
 package com.cypress.diary
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -35,10 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import com.cypress.diary.accounting.mergeAccountingRecords
 import com.cypress.diary.accounting.mergeAccountingCategories
 import com.cypress.diary.accounting.replaceAccountingRecords
@@ -57,7 +47,6 @@ import com.cypress.diary.model.accounting.AccountingCategory
 import com.cypress.diary.model.accounting.AccountingRecord
 import com.cypress.diary.model.accounting.AccountingRecordType
 import com.cypress.diary.model.accounting.defaultAccountingCategories
-import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.parser.DiaryDocumentCodec
 import com.cypress.diary.parser.DiaryMarkdownCodec
 import com.cypress.diary.parser.WeekPathResolver
@@ -71,11 +60,6 @@ import com.cypress.diary.storage.DiaryDocumentCacheStore
 import com.cypress.diary.storage.DiaryWeekCacheStore
 import com.cypress.diary.storage.EditorDraftStore
 import com.cypress.diary.storage.SharedPreferencesPreferenceStore
-import com.cypress.diary.storage.TodoItemStore
-import com.cypress.diary.todo.TodoFilter
-import com.cypress.diary.todo.TodoReminderScheduler
-import com.cypress.diary.todo.hasFutureAlarmModeReminders
-import com.cypress.diary.todo.todoItemsForDate
 import com.cypress.diary.ui.components.AppBackground
 import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
@@ -88,8 +72,6 @@ import com.cypress.diary.ui.screens.AccountingStatsScreen
 import com.cypress.diary.ui.screens.AccountingStatsMode
 import com.cypress.diary.ui.screens.ProfileScreen
 import com.cypress.diary.ui.screens.SummaryScreen
-import com.cypress.diary.ui.screens.TodoEditorScreen
-import com.cypress.diary.ui.screens.TodoListScreen
 import com.cypress.diary.ui.calendar.DiaryCalendarMode
 import com.cypress.diary.ui.editor.DraftContentResolver
 import com.cypress.diary.ui.editor.DiaryEditContentBuilder
@@ -140,14 +122,6 @@ fun DiaryApp() {
     val accountingCategoryStore = remember(context) {
         AccountingCategoryStore(context.getSharedPreferences("accounting_categories", android.content.Context.MODE_PRIVATE))
     }
-    val todoItemStore = remember(context) {
-        TodoItemStore(context.getSharedPreferences("todo_items", android.content.Context.MODE_PRIVATE))
-    }
-    val todoReminderScheduler = remember(context) { TodoReminderScheduler(context) }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {
-    }
     val repository = remember { GitHubDiaryRepository() }
     val quoteRepository = remember { DailyQuoteRepository() }
     val editorBuilder = remember { DiaryEditContentBuilder() }
@@ -174,10 +148,10 @@ fun DiaryApp() {
     var activeModuleName by rememberSaveable { mutableStateOf(initialModule.name) }
     var route by rememberSaveable {
         mutableStateOf(
-            when (initialModule) {
-                AppModule.Diary -> DiaryRoute.Diary.route
-                AppModule.Accounting -> DiaryRoute.Ledger.route
-                AppModule.Todo -> DiaryRoute.TodoList.route
+            if (initialModule == AppModule.Accounting) {
+                DiaryRoute.Ledger.route
+            } else {
+                DiaryRoute.Diary.route
             },
         )
     }
@@ -200,11 +174,6 @@ fun DiaryApp() {
     var accountingStatsModeName by rememberSaveable { mutableStateOf(AccountingStatsMode.Month.name) }
     var selectedAccountingRecordId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingAccountingImportData by remember { mutableStateOf<AccountingArchiveData?>(null) }
-    var todoItems by remember { mutableStateOf(todoItemStore.loadItems()) }
-    var selectedTodoItemId by rememberSaveable { mutableStateOf<String?>(null) }
-    var todoFilterName by rememberSaveable { mutableStateOf(TodoFilter.All.name) }
-    var todoReturnRoute by rememberSaveable { mutableStateOf(DiaryRoute.TodoList.route) }
-    var exactAlarmPermissionPrompted by rememberSaveable { mutableStateOf(false) }
 
     val selectedDate = LocalDate.parse(selectedDateValue)
     val activeModule = AppModule.valueOf(activeModuleName)
@@ -214,53 +183,6 @@ fun DiaryApp() {
     val accountingStatsMode = AccountingStatsMode.valueOf(accountingStatsModeName)
     val accountingCategories = defaultAccountingCategories + customAccountingCategories
     val selectedAccountingRecord = accountingRecords.firstOrNull { it.id == selectedAccountingRecordId }
-    val selectedTodoItem = todoItems.firstOrNull { it.id == selectedTodoItemId }
-    val todoFilter = TodoFilter.valueOf(todoFilterName)
-
-    LaunchedEffect(todoReminderScheduler) {
-        todoReminderScheduler.scheduleAll(todoItems)
-    }
-
-    LaunchedEffect(activeModule, route) {
-        if (
-            (activeModule == AppModule.Todo || route == DiaryRoute.TodoEditor.route) &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    fun requestExactAlarmPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || todoReminderScheduler.canScheduleExactAlarms()) return
-        Toast.makeText(context, "请允许精确闹钟权限，待办提醒才能按时触发", Toast.LENGTH_LONG).show()
-        val intent = Intent(
-            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-            Uri.parse("package:${context.packageName}"),
-        ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching {
-            context.startActivity(intent)
-        }.onFailure {
-            Toast.makeText(context, "无法打开精确闹钟权限设置", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    LaunchedEffect(activeModule, route, todoItems) {
-        val shouldPromptOnTodoScreens = activeModule == AppModule.Todo || route == DiaryRoute.TodoEditor.route
-        if (
-            shouldPromptOnTodoScreens &&
-            hasFutureAlarmModeReminders(todoItems) &&
-            !todoReminderScheduler.canScheduleExactAlarms() &&
-            !exactAlarmPermissionPrompted
-        ) {
-            exactAlarmPermissionPrompted = true
-            requestExactAlarmPermissionIfNeeded()
-        }
-    }
-
     val activeDocuments = resolveActiveDocuments(remoteDocuments, cachedDocuments, cachedWeeks, weekCodec)
     val exportSourceDocuments = activeDocuments
     val activeWeeks = remember(remoteDocuments, cachedDocuments, cachedWeeks) {
@@ -349,12 +271,9 @@ fun DiaryApp() {
         activeModuleName = module.name
         moduleStore.save(module)
         selectedAccountingRecordId = null
-        selectedTodoItemId = null
-        todoReturnRoute = DiaryRoute.TodoList.route
         route = when (module) {
             AppModule.Diary -> DiaryRoute.Diary.route
             AppModule.Accounting -> DiaryRoute.Ledger.route
-            AppModule.Todo -> DiaryRoute.TodoList.route
         }
     }
 
@@ -366,40 +285,6 @@ fun DiaryApp() {
     fun deleteAccountingRecord(id: String) {
         accountingRecordStore.delete(id)
         accountingRecords = accountingRecordStore.loadRecords()
-    }
-
-    fun saveTodoItem(item: TodoItem) {
-        todoItemStore.upsert(item)
-        todoItems = todoItemStore.loadItems()
-        todoReminderScheduler.sync(item)
-        if (hasFutureAlarmModeReminders(listOf(item)) && !todoReminderScheduler.canScheduleExactAlarms()) {
-            exactAlarmPermissionPrompted = true
-            requestExactAlarmPermissionIfNeeded()
-        }
-    }
-
-    fun deleteTodoItem(id: String) {
-        todoReminderScheduler.cancel(id)
-        todoItemStore.delete(id)
-        todoItems = todoItemStore.loadItems()
-    }
-
-    fun deleteTodoItems(items: List<TodoItem>) {
-        val ids = items.map { it.id }.toSet()
-        ids.forEach(todoReminderScheduler::cancel)
-        todoItemStore.saveItems(todoItems.filterNot { it.id in ids })
-        todoItems = todoItemStore.loadItems()
-    }
-
-    fun toggleTodoItem(item: TodoItem) {
-        val now = System.currentTimeMillis()
-        saveTodoItem(
-            item.copy(
-                completed = !item.completed,
-                updatedAt = now,
-                completedAt = if (item.completed) null else now,
-            ),
-        )
     }
 
     fun addAccountingCategory(type: AccountingRecordType, label: String): AccountingCategory {
@@ -696,41 +581,21 @@ fun DiaryApp() {
                         }
                     }
                 },
-                floatingActionButtonPosition = FabPosition.Center,
                 floatingActionButton = {
                     when {
                         activeModule == AppModule.Diary && route == DiaryRoute.Diary.route -> {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                            FloatingActionButton(
+                                onClick = {
+                                    editorDocumentPath = null
+                                    editorDocumentFallback = null
+                                    editorModeName = EditMode.Day.name
+                                    route = DiaryRoute.Editor.route
+                                },
                             ) {
-                                FloatingActionButton(
-                                    onClick = {
-                                        selectedTodoItemId = null
-                                        todoReturnRoute = DiaryRoute.Diary.route
-                                        route = DiaryRoute.TodoEditor.route
-                                    },
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = "新建待办",
-                                    )
-                                }
-                                FloatingActionButton(
-                                    onClick = {
-                                        editorDocumentPath = null
-                                        editorDocumentFallback = null
-                                        editorModeName = EditMode.Day.name
-                                        route = DiaryRoute.Editor.route
-                                    },
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Edit,
-                                        contentDescription = "编辑",
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = "编辑",
+                                )
                             }
                         }
                         activeModule == AppModule.Accounting && route == DiaryRoute.Ledger.route -> {
@@ -743,20 +608,6 @@ fun DiaryApp() {
                                 Icon(
                                     imageVector = Icons.Filled.Add,
                                     contentDescription = "记一笔",
-                                )
-                            }
-                        }
-                        activeModule == AppModule.Todo && route == DiaryRoute.TodoList.route -> {
-                            FloatingActionButton(
-                                onClick = {
-                                    selectedTodoItemId = null
-                                    todoReturnRoute = DiaryRoute.TodoList.route
-                                    route = DiaryRoute.TodoEditor.route
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Add,
-                                    contentDescription = "新建待办",
                                 )
                             }
                         }
@@ -773,14 +624,6 @@ fun DiaryApp() {
                         calendarMode = diaryCalendarMode,
                         onCalendarModeChange = { mode -> diaryCalendarModeName = mode.name },
                         quote = dailyQuote,
-                        todoItems = todoItemsForDate(todoItems, selectedDate),
-                        onTodoSelected = { item ->
-                            selectedTodoItemId = item.id
-                            todoReturnRoute = DiaryRoute.Diary.route
-                            route = DiaryRoute.TodoEditor.route
-                        },
-                        onTodoToggle = ::toggleTodoItem,
-                        onTodoDeleteSelected = ::deleteTodoItems,
                         searchQuery = diarySearchQuery,
                         searchResults = diarySearchResults,
                         onSearchQueryChange = { diarySearchQuery = it },
@@ -913,46 +756,6 @@ fun DiaryApp() {
                             selectedAccountingRecordId = null
                             route = DiaryRoute.Ledger.route
                             Toast.makeText(context, "账目已删除", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.padding(innerPadding),
-                    )
-
-                    DiaryRoute.TodoList.route -> TodoListScreen(
-                        items = todoItems,
-                        selectedDate = selectedDate,
-                        selectedFilter = todoFilter,
-                        onFilterChange = { filter -> todoFilterName = filter.name },
-                        onItemSelected = { item ->
-                            selectedTodoItemId = item.id
-                            todoReturnRoute = DiaryRoute.TodoList.route
-                            route = DiaryRoute.TodoEditor.route
-                        },
-                        onToggleCompleted = ::toggleTodoItem,
-                        refreshing = false,
-                        onRefresh = {},
-                        modifier = Modifier.padding(innerPadding),
-                    )
-
-                    DiaryRoute.TodoEditor.route -> TodoEditorScreen(
-                        item = selectedTodoItem,
-                        initialDate = selectedDate,
-                        refreshing = false,
-                        onRefresh = {},
-                        onBack = {
-                            selectedTodoItemId = null
-                            route = todoReturnRoute
-                        },
-                        onSave = { item ->
-                            saveTodoItem(item)
-                            selectedTodoItemId = null
-                            route = todoReturnRoute
-                            Toast.makeText(context, "待办已保存", Toast.LENGTH_SHORT).show()
-                        },
-                        onDelete = { id ->
-                            deleteTodoItem(id)
-                            selectedTodoItemId = null
-                            route = todoReturnRoute
-                            Toast.makeText(context, "待办已删除", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.padding(innerPadding),
                     )
@@ -1151,11 +954,8 @@ internal fun isGitHubSettingsSearchQuery(query: String): Boolean {
 internal fun isBottomRouteSelected(rootRoute: DiaryRoute?, route: String): Boolean {
     return when (rootRoute) {
         null -> false
-        DiaryRoute.Diary -> route == DiaryRoute.Diary.route ||
-            route == DiaryRoute.Editor.route ||
-            route == DiaryRoute.TodoEditor.route
+        DiaryRoute.Diary -> route == DiaryRoute.Diary.route || route == DiaryRoute.Editor.route
         DiaryRoute.Ledger -> route == DiaryRoute.Ledger.route || route == DiaryRoute.AccountingEditor.route
-        DiaryRoute.TodoList -> route == DiaryRoute.TodoList.route || route == DiaryRoute.TodoEditor.route
         else -> route == rootRoute.route
     }
 }

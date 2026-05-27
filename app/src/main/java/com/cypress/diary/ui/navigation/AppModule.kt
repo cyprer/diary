@@ -5,10 +5,4 @@ enum class AppModule(
 ) {
     Diary("日记"),
     Accounting("记账"),
-    Todo("待办");
-
-    companion object {
-        val selectable: List<AppModule>
-            get() = listOf(Diary, Accounting)
-    }
 }

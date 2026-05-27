@@ -9,7 +9,7 @@ class AppModuleStore(
 
     fun load(): AppModule {
         val value = preferences.getString(KEY_MODULE, AppModule.Diary.name)
-        return AppModule.selectable.firstOrNull { it.name == value } ?: AppModule.Diary
+        return AppModule.values().firstOrNull { it.name == value } ?: AppModule.Diary
     }
 
     fun save(module: AppModule) {
