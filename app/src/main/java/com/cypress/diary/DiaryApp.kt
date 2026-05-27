@@ -75,6 +75,7 @@ import com.cypress.diary.storage.TodoItemStore
 import com.cypress.diary.todo.TodoFilter
 import com.cypress.diary.todo.TodoReminderScheduler
 import com.cypress.diary.todo.hasFutureAlarmModeReminders
+import com.cypress.diary.todo.todoItemsForDate
 import com.cypress.diary.ui.components.AppBackground
 import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
@@ -765,6 +766,13 @@ fun DiaryApp() {
                         calendarMode = diaryCalendarMode,
                         onCalendarModeChange = { mode -> diaryCalendarModeName = mode.name },
                         quote = dailyQuote,
+                        todoItems = todoItemsForDate(todoItems, selectedDate),
+                        onTodoSelected = { item ->
+                            selectedTodoItemId = item.id
+                            todoReturnRoute = DiaryRoute.Diary.route
+                            route = DiaryRoute.TodoEditor.route
+                        },
+                        onTodoToggle = ::toggleTodoItem,
                         searchQuery = diarySearchQuery,
                         searchResults = diarySearchResults,
                         onSearchQueryChange = { diarySearchQuery = it },

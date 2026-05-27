@@ -31,12 +31,17 @@ object TodoReminderNotifier {
         if (!canPostNotifications(context)) return
         ensureChannel(context, reminderMode)
 
+        val openIntent = if (reminderMode == TodoReminderMode.Alarm) {
+            TodoAlarmActivity.intent(context, title, note)
+        } else {
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        }
         val contentIntent = PendingIntent.getActivity(
             context,
             TodoReminderScheduler.requestCode(id),
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val body = note.ifBlank { "该处理这个待办了" }

@@ -26,6 +26,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".todo.TodoAlarmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Diary" />
+
         <receiver
             android:name=".todo.TodoReminderReceiver"
             android:exported="false" />

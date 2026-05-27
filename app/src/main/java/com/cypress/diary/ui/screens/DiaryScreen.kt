@@ -7,14 +7,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,8 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.cypress.diary.model.todo.TodoItem
+import com.cypress.diary.todo.formatReminderTime
 import com.cypress.diary.ui.calendar.CalendarModeTabs
 import com.cypress.diary.ui.calendar.CalendarMonthPicker
 import com.cypress.diary.ui.calendar.CalendarWeekPicker
@@ -49,6 +55,9 @@ fun DiaryScreen(
     calendarMode: DiaryCalendarMode,
     onCalendarModeChange: (DiaryCalendarMode) -> Unit,
     quote: String?,
+    todoItems: List<TodoItem>,
+    onTodoSelected: (TodoItem) -> Unit,
+    onTodoToggle: (TodoItem) -> Unit,
     searchQuery: String,
     searchResults: List<DiarySearchResult>,
     onSearchQueryChange: (String) -> Unit,
@@ -94,6 +103,84 @@ fun DiaryScreen(
             )
 
             DiaryCard(body = body)
+
+            DayTodoSection(
+                items = todoItems,
+                onTodoSelected = onTodoSelected,
+                onTodoToggle = onTodoToggle,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DayTodoSection(
+    items: List<TodoItem>,
+    onTodoSelected: (TodoItem) -> Unit,
+    onTodoToggle: (TodoItem) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("当天待办", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (items.isEmpty()) {
+                Text(
+                    text = "当天暂无待办",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+                )
+            } else {
+                items.forEach { item ->
+                    DayTodoRow(
+                        item = item,
+                        onClick = { onTodoSelected(item) },
+                        onToggle = { onTodoToggle(item) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayTodoRow(
+    item: TodoItem,
+    onClick: () -> Unit,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Checkbox(
+            checked = item.completed,
+            onCheckedChange = { onToggle() },
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = if (item.completed) TextDecoration.LineThrough else TextDecoration.None,
+            )
+            val reminderText = item.reminderAtMillis?.let { millis ->
+                "${item.reminderMode.label} ${formatReminderTime(millis)}"
+            } ?: "未设置提醒"
+            Text(
+                text = reminderText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            )
         }
     }
 }

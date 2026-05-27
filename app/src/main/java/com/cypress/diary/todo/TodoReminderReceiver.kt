@@ -14,6 +14,11 @@ class TodoReminderReceiver : BroadcastReceiver() {
         val reminderMode = intent.getStringExtra(TodoReminderScheduler.EXTRA_TODO_REMINDER_MODE)
             ?.let { runCatching { TodoReminderMode.valueOf(it) }.getOrNull() }
             ?: TodoReminderMode.Alarm
+        if (reminderMode == TodoReminderMode.Alarm) {
+            runCatching {
+                context.startActivity(TodoAlarmActivity.intent(context, title.ifBlank { "待办" }, note))
+            }
+        }
         TodoReminderNotifier.show(
             context = context,
             id = id,
