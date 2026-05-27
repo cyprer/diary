@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.model.todo.TodoPriority
+import com.cypress.diary.model.todo.TodoReminderMode
 import com.cypress.diary.todo.formatReminderTime
 import com.cypress.diary.todo.isPastReminder
 import com.cypress.diary.todo.parseReminderTimeOnDate
@@ -52,6 +53,9 @@ fun TodoEditorScreen(
     var reminderTimeText by rememberSaveable(item?.id, initialDate.toString()) {
         mutableStateOf(item?.reminderAtMillis?.let(::formatReminderTime).orEmpty())
     }
+    var reminderModeName by rememberSaveable(item?.id) {
+        mutableStateOf(item?.reminderMode?.name ?: TodoReminderMode.Alarm.name)
+    }
     var showDeleteConfirm by rememberSaveable(item?.id) { mutableStateOf(false) }
     val reminderMillis = reminderTimeText.takeIf { it.isNotBlank() }?.let { time ->
         parseReminderTimeOnDate(time, initialDate)
@@ -60,6 +64,7 @@ fun TodoEditorScreen(
     val reminderInvalid = reminderTimeText.isNotBlank() && reminderMillis == null
     val reminderPast = reminderMillis?.let(::isPastReminder) == true
     val canSave = title.isNotBlank() && !reminderMissing && !reminderInvalid && !reminderPast
+    val reminderMode = TodoReminderMode.valueOf(reminderModeName)
 
     RefreshableScreen(
         refreshing = refreshing,
@@ -129,6 +134,20 @@ fun TodoEditorScreen(
             },
         )
 
+        Text("提醒方式", fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TodoReminderMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = reminderMode == mode,
+                    onClick = { reminderModeName = mode.name },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
+
         Button(
             enabled = canSave,
             onClick = {
@@ -140,6 +159,7 @@ fun TodoEditorScreen(
                         note = note.trim(),
                         dueDate = initialDate,
                         reminderAtMillis = reminderMillis,
+                        reminderMode = reminderMode,
                         priority = TodoPriority.Medium,
                         completed = item?.completed ?: false,
                         createdAt = item?.createdAt ?: now,

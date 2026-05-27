@@ -140,7 +140,9 @@ private fun TodoItemRow(
 
 private fun itemMetaText(item: TodoItem): String {
     val due = item.dueDate?.let { "${it.monthValue}月${it.dayOfMonth}日" } ?: "无截止日期"
-    val reminder = item.reminderAtMillis?.let { " · 提醒 ${formatReminderMillis(it)}" }.orEmpty()
+    val reminder = item.reminderAtMillis
+        ?.let { " · ${item.reminderMode.label} ${formatReminderMillis(it)}" }
+        .orEmpty()
     return "$due · ${item.priority.label}$reminder"
 }
 

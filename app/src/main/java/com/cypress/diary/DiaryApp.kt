@@ -74,7 +74,7 @@ import com.cypress.diary.storage.SharedPreferencesPreferenceStore
 import com.cypress.diary.storage.TodoItemStore
 import com.cypress.diary.todo.TodoFilter
 import com.cypress.diary.todo.TodoReminderScheduler
-import com.cypress.diary.todo.hasFutureTodoReminders
+import com.cypress.diary.todo.hasFutureAlarmModeReminders
 import com.cypress.diary.ui.components.AppBackground
 import com.cypress.diary.ui.navigation.AppModule
 import com.cypress.diary.ui.navigation.DiaryRoute
@@ -251,7 +251,7 @@ fun DiaryApp() {
         val shouldPromptOnTodoScreens = activeModule == AppModule.Todo || route == DiaryRoute.TodoEditor.route
         if (
             shouldPromptOnTodoScreens &&
-            hasFutureTodoReminders(todoItems) &&
+            hasFutureAlarmModeReminders(todoItems) &&
             !todoReminderScheduler.canScheduleExactAlarms() &&
             !exactAlarmPermissionPrompted
         ) {
@@ -371,7 +371,7 @@ fun DiaryApp() {
         todoItemStore.upsert(item)
         todoItems = todoItemStore.loadItems()
         todoReminderScheduler.sync(item)
-        if (hasFutureTodoReminders(listOf(item)) && !todoReminderScheduler.canScheduleExactAlarms()) {
+        if (hasFutureAlarmModeReminders(listOf(item)) && !todoReminderScheduler.canScheduleExactAlarms()) {
             exactAlarmPermissionPrompted = true
             requestExactAlarmPermissionIfNeeded()
         }

@@ -8,6 +8,12 @@ enum class TodoPriority(val label: String, val rank: Int) {
     High("高", 2),
 }
 
+enum class TodoReminderMode(val label: String) {
+    Alarm("闹钟"),
+    Notification("通知"),
+    Vibration("震动"),
+}
+
 data class TodoItem(
     val id: String,
     val title: String,
@@ -19,4 +25,5 @@ data class TodoItem(
     val updatedAt: Long,
     val completedAt: Long?,
     val reminderAtMillis: Long? = null,
+    val reminderMode: TodoReminderMode = TodoReminderMode.Alarm,
 )

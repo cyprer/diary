@@ -2,6 +2,7 @@ package com.cypress.diary.storage
 
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.model.todo.TodoPriority
+import com.cypress.diary.model.todo.TodoReminderMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -67,6 +68,20 @@ class TodoItemStoreTest {
     }
 
     @Test
+    fun reminderModeRoundTrips() {
+        val store = TodoItemStore(InMemoryPreferenceStore())
+        val item = item(
+            "vibration",
+            reminderAtMillis = 1_779_811_200_000,
+            reminderMode = TodoReminderMode.Vibration,
+        )
+
+        store.saveItems(listOf(item))
+
+        assertEquals(listOf(item), store.loadItems())
+    }
+
+    @Test
     fun legacyItemsWithoutReminderStillLoad() {
         val prefs = InMemoryPreferenceStore()
         val legacy = listOf(
@@ -85,6 +100,37 @@ class TodoItemStoreTest {
         assertEquals(listOf(item("legacy", title = "Legacy", note = "")), TodoItemStore(prefs).loadItems())
     }
 
+    @Test
+    fun legacyItemsWithoutReminderModeDefaultToAlarm() {
+        val prefs = InMemoryPreferenceStore()
+        val legacy = listOf(
+            "bGVnYWN5",
+            "TGVnYWN5",
+            "",
+            "2026-05-26",
+            "Medium",
+            "false",
+            "10",
+            "20",
+            "",
+            "1779811200000",
+        ).joinToString("|")
+        prefs.putString("todo_items", legacy)
+
+        assertEquals(
+            listOf(
+                item(
+                    "legacy",
+                    title = "Legacy",
+                    note = "",
+                    reminderAtMillis = 1_779_811_200_000,
+                    reminderMode = TodoReminderMode.Alarm,
+                ),
+            ),
+            TodoItemStore(prefs).loadItems(),
+        )
+    }
+
     private fun item(
         id: String,
         title: String = id,
@@ -96,6 +142,7 @@ class TodoItemStoreTest {
         updatedAt: Long = 20,
         completedAt: Long? = if (completed) updatedAt else null,
         reminderAtMillis: Long? = null,
+        reminderMode: TodoReminderMode = TodoReminderMode.Alarm,
     ): TodoItem {
         return TodoItem(
             id = id,
@@ -108,6 +155,7 @@ class TodoItemStoreTest {
             updatedAt = updatedAt,
             completedAt = completedAt,
             reminderAtMillis = reminderAtMillis,
+            reminderMode = reminderMode,
         )
     }
 

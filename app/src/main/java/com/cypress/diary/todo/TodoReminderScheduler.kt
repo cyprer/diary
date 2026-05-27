@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.cypress.diary.MainActivity
 import com.cypress.diary.model.todo.TodoItem
+import com.cypress.diary.model.todo.TodoReminderMode
 import kotlin.math.abs
 
 class TodoReminderScheduler(
@@ -36,7 +37,7 @@ class TodoReminderScheduler(
 
     private fun schedule(item: TodoItem) {
         val reminderAt = item.reminderAtMillis ?: return
-        if (!canScheduleExactAlarms()) {
+        if (item.reminderMode == TodoReminderMode.Alarm && !canScheduleExactAlarms()) {
             cancel(item.id)
             return
         }
@@ -49,13 +50,21 @@ class TodoReminderScheduler(
             pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
         )
         val operation = reminderPendingIntent(item.id, PendingIntent.FLAG_UPDATE_CURRENT, item) ?: return
-        try {
-            alarmManager.setAlarmClock(
-                AlarmManager.AlarmClockInfo(reminderAt, showIntent),
-                operation,
-            )
-        } catch (_: SecurityException) {
-            cancel(item.id)
+        when (item.reminderMode) {
+            TodoReminderMode.Alarm -> {
+                try {
+                    alarmManager.setAlarmClock(
+                        AlarmManager.AlarmClockInfo(reminderAt, showIntent),
+                        operation,
+                    )
+                } catch (_: SecurityException) {
+                    cancel(item.id)
+                }
+            }
+            TodoReminderMode.Notification,
+            TodoReminderMode.Vibration -> {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminderAt, operation)
+            }
         }
     }
 
@@ -70,6 +79,7 @@ class TodoReminderScheduler(
             if (item != null) {
                 putExtra(EXTRA_TODO_TITLE, item.title)
                 putExtra(EXTRA_TODO_NOTE, item.note)
+                putExtra(EXTRA_TODO_REMINDER_MODE, item.reminderMode.name)
             }
         }
         return PendingIntent.getBroadcast(appContext, requestCode(id), intent, pendingIntentFlags(flags))
@@ -87,6 +97,7 @@ class TodoReminderScheduler(
         const val EXTRA_TODO_ID = "todo_id"
         const val EXTRA_TODO_TITLE = "todo_title"
         const val EXTRA_TODO_NOTE = "todo_note"
+        const val EXTRA_TODO_REMINDER_MODE = "todo_reminder_mode"
 
         fun requestCode(id: String): Int {
             return abs(id.hashCode())

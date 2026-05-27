@@ -2,6 +2,7 @@ package com.cypress.diary.storage
 
 import com.cypress.diary.model.todo.TodoItem
 import com.cypress.diary.model.todo.TodoPriority
+import com.cypress.diary.model.todo.TodoReminderMode
 import com.cypress.diary.todo.sortTodoItems
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
@@ -49,12 +50,13 @@ class TodoItemStore(
                 item.updatedAt.toString(),
                 item.completedAt?.toString().orEmpty(),
                 item.reminderAtMillis?.toString().orEmpty(),
+                item.reminderMode.name,
             ).joinToString("|")
         }
 
         private fun decode(value: String): TodoItem {
             val parts = value.split('|')
-            require(parts.size == 9 || parts.size == 10) { "invalid todo item" }
+            require(parts.size == 9 || parts.size == 10 || parts.size == 11) { "invalid todo item" }
             return TodoItem(
                 id = unsafe(parts[0]),
                 title = unsafe(parts[1]),
@@ -66,6 +68,10 @@ class TodoItemStore(
                 updatedAt = parts[7].toLong(),
                 completedAt = parts[8].takeIf { it.isNotBlank() }?.toLong(),
                 reminderAtMillis = parts.getOrNull(9)?.takeIf { it.isNotBlank() }?.toLong(),
+                reminderMode = parts.getOrNull(10)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(TodoReminderMode::valueOf)
+                    ?: TodoReminderMode.Alarm,
             )
         }
 
