@@ -51,7 +51,13 @@ object TodoReminderNotifier {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(
+                if (reminderMode == TodoReminderMode.Alarm) {
+                    NotificationCompat.PRIORITY_MAX
+                } else {
+                    NotificationCompat.PRIORITY_HIGH
+                },
+            )
             .setCategory(
                 if (reminderMode == TodoReminderMode.Alarm) {
                     NotificationCompat.CATEGORY_ALARM
